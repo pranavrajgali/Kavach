@@ -3,6 +3,7 @@
 
 > [!IMPORTANT]  
 > Before generating code, refer to the [Integration Roadmap](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/plans/integration_roadmap.md) and the [BUILD_GUIDE.md](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/BUILD_GUIDE.md) to understand chronological dependencies. Establishing Pydantic data contracts (`contracts.py`) and database schemas is Phase 1 and must be done first to unblock all other tracks.
+> **DO NOT modify or touch any other files in the workspace that are not explicitly listed in this plan.**
 
 > **FOR THE LLM:** You are an AI coding assistant helping Pranav Krishna implement the **FastAPI Server**, **SQLModel database schemas**, **Redis/ARQ Task Workers**, and the **Stage 6 Telemetry Merger** for Kavach.ai. Below are the context, exact requirements, directory structures, and code snippets to complete this track. Follow these guidelines strictly.
 

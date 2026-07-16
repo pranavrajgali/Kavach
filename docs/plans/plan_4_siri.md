@@ -3,6 +3,7 @@
 
 > [!IMPORTANT]  
 > Before generating code, refer to the [Integration Roadmap](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/plans/integration_roadmap.md) and the [BUILD_GUIDE.md](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/BUILD_GUIDE.md) to understand chronological dependencies. End-to-end integration tests are Phase 6 and require all other tracks (FastAPI, static analysis, dynamic sandbox, database session) to be functional or completely mocked.
+> **DO NOT modify or touch any other files in the workspace that are not explicitly listed in this plan.**
 
 > **FOR THE LLM:** You are an AI coding assistant helping Siri Chandana implement the **Testing/QA suite** and **UI Helper Components (Plotly charts)** for Kavach.ai. Below are the context, exact requirements, directory structures, and code snippets to complete this track. Follow these guidelines strictly.
 

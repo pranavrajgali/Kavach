@@ -3,6 +3,7 @@
 
 > [!IMPORTANT]  
 > Before generating code, refer to the [Integration Roadmap](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/plans/integration_roadmap.md) and the [BUILD_GUIDE.md](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/BUILD_GUIDE.md) to understand chronological dependencies. SecureBERT-2.0 inference relies on sliced tokens from Stage 3, and Groq LLaMA-3 reports rely on the telemetry merger from Plan 3. Use mocks where required.
+> **DO NOT modify or touch any other files in the workspace that are not explicitly listed in this plan.**
 
 > **FOR THE LLM:** You are an AI coding assistant helping Abhinav Mucharla implement the **Static Analysis**, **SecureBERT ML Core**, **SHAP Explainability**, and **Groq LLM Report Generator** for Kavach.ai. Below are the context, exact requirements, directory structures, and code snippets to complete this track. Follow these guidelines strictly.
 
