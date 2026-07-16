@@ -27,11 +27,11 @@ graph TD
     
     %% Phase 5
     P9 --> P10[10. Groq CERT-In Report Generation]
-    P10 --> P11[11. Streamlit Dashboard & UI Highlights]
-    P8 --> P11
+    P10 --> P12[12. End-to-End Pytest Verification]
     
     %% Phase 6
-    P11 --> P12[12. End-to-End Pytest Verification]
+    P12 --> P11[11. Streamlit Dashboard & UI Highlights]
+    P8 --> P11
 ```
 
 ---
@@ -67,8 +67,14 @@ graph TD
   * **[Abhinav / Track 2]** Construct Groq prompts using LLaMA-3 to generate the CERT-In incident report markdown.
 * **LLM Tip:** *Ensure the database connection models are verified. If the eBPF logs are incomplete, pass a mock dynamic JSON representation to test the synthesis merger.*
 
-### 🖥️ Phase 5: UI Integration & Testing (Days 10 - 12)
-* **Goal:** Bind the UI to real API routes and write unit tests.
+### 🧪 Phase 5: Backend Integration & Automated Testing (Days 10 - 11)
+* **Goal:** Verify all backend routes, model inference paths, and database transactions under automated test suites.
+* **Core Tasks:**
+  * **[Siri / Track 4]** Implement API tests using pytest TestClient. Verify DB transaction rules and mock pipeline runs.
+* **LLM Tip:** *This stage validates the entire API capability. The web server must pass all tests before client dashboard bindings begin.*
+
+### 🎨 Phase 6: Streamlit Frontend & UI Integration (Days 12 - 14)
+* **Goal:** Bind the Streamlit UI to live endpoints, hook dynamic status polling, and enable interactive SHAP highlights.
 * **Core Tasks:**
   * **[Galipalli / Track 1]** Hook Streamlit dashboard state machine to read status from FastAPI `/status/{job_id}`. Connect the SHAP highlighting panel.
-  * **[Siri / Track 4]** Implement API tests using pytest TestClient. Verify DB transaction rules.
+* **LLM Tip:** *This is the final integration phase. Run Streamlit only after pytest reports 100% pass on API routes.*

@@ -17,13 +17,16 @@
 
 ## 📋 Step-by-Step Task List
 
-### 🧪 Quality Assurance & Test Suites (`kavach_ai/backend/tests/...`)
+### 🧪 Quality Assurance & Test Suites (Phase 5 - Backend Testing)
 - [ ] **FastAPI Endpoint Tests:** Write unit tests using `pytest` and `TestClient` to call `/upload` (checking if `job_id` is successfully generated) and `/status/{job_id}`.
 - [ ] **Database Integrity Tests:** Write unit tests verifying that state updates (`QUEUED` to `COMPLETED`) are properly serialized into the [APK](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/BUILD_GUIDE.md) SQLModel schemas.
 - [ ] **Mock Pipeline Trials:** Write test functions that mock Track 2's ML output and Track 1's eBPF JSON output to verify that the synthesis merger creates valid JSON payloads.
 - [ ] **Mock LLM validation:** Write tests to check the CERT-In Groq prompt output validation logic under simulated network failures.
 
-### 📊 UI helper Components (`kavach_ai/frontend/components/charts.py`)
+### 📊 UI Helper Components (Phase 6 - Frontend Integration Support)
+> [!IMPORTANT]
+> **Do not implement Plotly visual helpers until the pytest automated suites report a 100% pass rate on API endpoints and database operations.**
+
 - [ ] **Threat Meter Gauges:** Create custom Plotly gauge charts reflecting the final SecureBERT malware probability score (0% to 100%).
 - [ ] **Permissions Risk Charts:** Create horizontal bar charts displaying high-risk permissions found in the Manifest (e.g., SMS read vs write) mapped to risk severity.
 

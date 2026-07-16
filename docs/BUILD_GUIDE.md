@@ -345,8 +345,11 @@ Merge static/dynamic results, resolve contradictions, write to `apks` / `smali_s
 ### Phase 8: LLaMA-3 Report Generation
 Groq API integration, Pydantic schema enforcement, regex fallback parser, CERT-In form template.
 
-### Phases 9–N: Continued Build
-Historical reports view, polish pass on Streamlit dashboard, load testing on async job queue.
+### Phase 9: Automated Testing & Verification
+Implement pytest suites to cover all API endpoints, database operations, and pipeline mock cycles. Refer to [plan_4_siri.md](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/plans/plan_4_siri.md) for verification guidelines.
+
+### Phase 10: Streamlit Dashboard & Integration
+Construct Streamlit view layout, hook client-side job status polling, implement Plotly visual threat charts, and integrate interactive SHAP highlights. Refer to [plan_1_pranav_raj.md](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/plans/plan_1_pranav_raj.md) for final UI assembly.
 
 ---
 
