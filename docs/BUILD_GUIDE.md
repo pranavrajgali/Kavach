@@ -251,6 +251,18 @@ Browse past analyses via `apk_hash` lookup — ties directly into the audit-trai
 ## 5. Project Structure
 
 ```
+data/                           # Local, gitignored data directories
+└── .gitkeep
+│
+training/                       # Offline model fine-tuning environment
+├── preprocess.py               # Ingests, CFG slices, and serializes to JSONL
+├── train.py                    # Single-device/Notebook fine-tuning script
+├── train_ddp.py                # Multi-GPU Distributed Data Parallel script
+└── utils/
+    ├── __init__.py
+    ├── slicer.py               # Control flow backward program slicer
+    └── parser.py               # Smali normalizer and token parser
+│
 kavach_ai/
 ├── .env
 ├── pyproject.toml

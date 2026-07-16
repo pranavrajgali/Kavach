@@ -106,7 +106,7 @@ git push origin feature/track-number-description
 1. Navigate to the original GitHub repository.
 2. You will see a banner prompting you to compare and create a Pull Request for your recently pushed branch. Click "Compare & pull request".
 3. Write a clear description of what your changes accomplish, link any relevant plans, and submit.
-4. Assign team members as reviewers.
+4. Assign the Team Lead (repository owner) as the sole reviewer. All pull requests must be approved by the Team Lead before they can be merged into the `main` branch.
 
 ---
 
@@ -115,3 +115,5 @@ git push origin feature/track-number-description
 * Write Automated Tests: When implementing backend logic or endpoints, verify your changes by writing or updating the test cases in the test suite. Refer to [plan_4_siri.md](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/plans/plan_4_siri.md) for testing guidelines.
 * Follow the Roadmap: Coordinate with the chronological dependencies outlined in [integration_roadmap.md](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/plans/integration_roadmap.md). Do not use real integration until the dependent track has completed its phase. Use mock endpoints when appropriate.
 * Build Specifications: Adhere to the schemas and configurations specified in the main [BUILD_GUIDE.md](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/BUILD_GUIDE.md).
+* Unified Mock Contracts: To prevent API/database mismatch between parallel tracks (frontend, backend, and testing), do not write ad-hoc mock payloads in your code. Instead, load and reference the shared mock signatures defined in [mock_payloads.json](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/tests/mocks/mock_payloads.json).
+* Continuous Integration: Every Pull Request submitted to the repository will automatically trigger our GitHub Actions workflow to run the test suite. Ensure all tests pass before requesting review.

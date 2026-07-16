@@ -34,7 +34,9 @@
 
 ### 🏋️ Offline Model Training & Fine-Tuning (Root `training/` directory)
 - [ ] **Corpus Preprocessing (`training/preprocess.py`):** Ingest raw APK datasets (AMD, Drebin, AndroZoo), split at the APK level (70/15/15) to prevent leakage, run backward CFG slicing, and serialize slices to `.jsonl` files.
-- [ ] **LoRA Fine-Tuning Setup (`training/train.py`):** Initialize PEFT/LoRA modules on SecureBERT-2.0 attention layers. Set up PyTorch DDP + AMP loops with weighted loss to handle class imbalances, then output saved weights/adapters to `kavach_ai/backend/pipeline/stage3_ml/weights/`.
+- [ ] **LoRA Fine-Tuning Setup (`training/train.py` & `train_ddp.py`):** Implement single-device, notebook-friendly training in `train.py` (dynamically detecting CUDA, MPS, or CPU) and multi-GPU distributed training in `train_ddp.py` (using `torchrun` and PyTorch DDP). Output saved weights/adapters to `kavach_ai/backend/pipeline/stage3_ml/weights/`.
+- [ ] **Program Slicing Utilities (`training/utils/slicer.py` & `parser.py`):** Encapsulate the Control Flow Graph extraction and Smali parsing logic in clean, reusable helper classes.
+- [ ] **Training Documentation (global README.md):** Review the training execution and environment setup guidelines documented in the root [README.md](file:///c:/Users/Admin/Documents/Projects/Kavach/README.md).
 
 ### 📝 Groq Incident Report (Stage 6 Synthesis)
 - [ ] **LLaMA-3 API Connection:** Connect to Groq API utilizing LLaMA-3-8b/70b.
@@ -71,19 +73,30 @@ Ensure GPU/CPU hardware compatibility and quick execution:
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
+def get_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
+
 def load_securebert_model(weights_dir):
+    device = get_device()
     tokenizer = AutoTokenizer.from_pretrained(weights_dir)
     model = AutoModelForSequenceClassification.from_pretrained(weights_dir)
+    model = model.to(device)
     model.eval()
-    return model, tokenizer
+    return model, tokenizer, device
 
-def predict_malware(model, tokenizer, program_slice_text):
+def predict_malware(model, tokenizer, device, program_slice_text):
     inputs = tokenizer(program_slice_text, return_tensors="pt", truncation=True, max_length=512)
+    inputs = {k: v.to(device) for k, v in inputs.items()}
     with torch.no_grad():
         outputs = model(**inputs)
         probs = torch.softmax(outputs.logits, dim=-1)
     return probs[0][1].item()  # Malware probability
-
+```
 
 ### 🏋️ LoRA Fine-Tuning Setup Template
 # Example training loop using PEFT

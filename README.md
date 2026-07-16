@@ -38,3 +38,38 @@ Development is divided into five main phases:
 3. ML Inference and Attribution: Set up the SecureBERT tokenizer, classification window, and PartitionSHAP calculations.
 4. Telemetry Synthesis and Reports: Combine static and dynamic logs and trigger Groq report generation.
 5. UI Integration and Testing: Connect Streamlit components to real endpoints and execute pytest verification.
+
+## Model Training Setup
+
+The model training pipeline is isolated in the root `training/` directory.
+
+### Environment Installation
+
+1. Create a dedicated virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate
+   pip install -e ./kavach_ai[training]
+   ```
+
+### Preprocessing and Slicing
+
+1. Place raw APK files under the root `data/` folder (e.g. `data/raw_apks/` which is ignored by Git).
+2. Run preprocessing to parse control flow graphs and extract Smali backward program slices:
+   ```bash
+   python training/preprocess.py
+   ```
+
+### Model Fine-Tuning
+
+We support two modes of model fine-tuning:
+1. **Single-Device / Notebook-Friendly (train.py):** Run locally or inside an online Jupyter notebook (such as Colab or RunPod) on a single GPU/MPS/CPU.
+   ```bash
+   python training/train.py
+   ```
+2. **Distributed Multi-GPU (train_ddp.py):** Run on distributed multi-GPU servers using `torchrun`.
+   ```bash
+   torchrun --nproc_per_node=NUM_GPUS training/train_ddp.py
+   ```
+
+All fine-tuned weights and model configurations will be saved directly into the local backend cache: `kavach_ai/backend/pipeline/stage3_ml/weights/`.

@@ -1,0 +1,89 @@
+{
+  "static_analysis": {
+    "apk_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "filename": "mock_banking_malware.apk",
+    "file_size": 1245890,
+    "triage_score": 85.50,
+    "permissions": [
+      "android.permission.RECEIVE_SMS",
+      "android.permission.READ_SMS",
+      "android.permission.BIND_ACCESSIBILITY_SERVICE",
+      "android.permission.SYSTEM_ALERT_WINDOW"
+    ],
+    "reflection_density": 0.72,
+    "is_obfuscated": true,
+    "smali_slices": [
+      {
+        "slice_id": 1,
+        "source_method": "Lcom/malicious/sms/Receiver;->onReceive(Landroid/content/Context;Landroid/content/Intent;)V",
+        "slice_text": "invoke-static {}, Landroid/telephony/SmsManager;->getDefault()Landroid/telephony/SmsManager;\nmove-result-object v0\ninvoke-virtual {v0, v1, v2, v3, v4, v5}, Landroid/telephony/SmsManager;->sendTextMessage(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Landroid/app/PendingIntent;Landroid/app/PendingIntent;)V",
+        "probability_score": 0.985
+      }
+    ]
+  },
+  "ml_attribution": {
+    "slice_id": 1,
+    "classification_score": 0.985,
+    "shap_attributions": [
+      {"token": "SmsManager", "weight": 0.420},
+      {"token": "sendTextMessage", "weight": 0.380},
+      {"token": "RECEIVE_SMS", "weight": 0.120},
+      {"token": "getDefault", "weight": 0.065}
+    ]
+  },
+  "dynamic_sandbox": {
+    "objection_root_bypass": true,
+    "objection_ssl_pinning_bypass": true,
+    "ebpf_telemetry": {
+      "syscalls": ["sys_clone", "sys_execve", "sys_socket", "sys_connect", "sys_write"],
+      "files_accessed": [
+        "/data/user/0/com.malicious.sms/shared_prefs/config.xml",
+        "/proc/self/maps"
+      ],
+      "network_connections": [
+        {"ip": "198.51.100.42", "port": 4444, "protocol": "TCP"}
+      ]
+    }
+  },
+  "fused_telemetry": {
+    "apk_meta": {
+      "apk_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "filename": "mock_banking_malware.apk",
+      "file_size": 1245890,
+      "triage_score": 85.50
+    },
+    "static_signals": {
+      "permissions": ["RECEIVE_SMS", "READ_SMS", "BIND_ACCESSIBILITY_SERVICE"],
+      "obfuscation_tags": true,
+      "reflection_density": 0.72
+    },
+    "behavioral_fingerprint": {
+      "syscalls": ["sys_clone", "sys_execve", "sys_connect", "sys_write"],
+      "ips": ["198.51.100.42"],
+      "file_writes": ["/data/user/0/com.malicious.sms/shared_prefs/config.xml"]
+    },
+    "ml_signals": {
+      "classification_score": 0.985,
+      "explainability_tokens": [
+        {"token": "SmsManager", "weight": 0.420},
+        {"token": "sendTextMessage", "weight": 0.380}
+      ]
+    }
+  },
+  "cert_in_report": {
+    "incident_type": "Banking Trojan / SMS Stealer",
+    "threat_level": "HIGH",
+    "indicators_of_compromise": [
+      "IP: 198.51.100.42",
+      "Hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ],
+    "compliance_violations": [
+      "RBI Master Direction on Digital Payment Security Controls Section 4.2",
+      "IT Act 2000 Section 66D (Cheating by impersonation using computer resource)"
+    ],
+    "mitre_attack_mappings": {
+      "T1636": "Credential Manager Query",
+      "T1589": "Gather Victim Identity Information"
+    }
+  }
+}

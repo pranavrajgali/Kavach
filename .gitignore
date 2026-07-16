@@ -46,3 +46,7 @@ kavach_ai/backend/uploads/
 uploads/
 *.apk
 stage3_ml/weights/
+
+# Data folder for training (ignore all files except .gitkeep)
+data/*
+!data/.gitkeep
