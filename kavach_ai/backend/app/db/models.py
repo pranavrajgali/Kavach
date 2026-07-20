@@ -1,18 +1,23 @@
-from datetime import datetime
-from typing import List, Optional, Dict, Any
-from sqlmodel import Field as SQLField, Relationship, SQLModel, JSON, UniqueConstraint
+from datetime import UTC, datetime
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import BigInteger, Column, JSON
+from sqlmodel import Field as SQLField, Relationship, SQLModel, UniqueConstraint
 
 # SQLModel Database Models in BCNF (Boyce-Codd Normal Form)
+
 
 class APK(SQLModel, table=True):
     __tablename__ = "apks"
 
     apk_hash: str = SQLField(primary_key=True, max_length=64)
+    job_id: str = SQLField(max_length=36, unique=True, nullable=False, index=True)
     filename: str = SQLField(max_length=255, nullable=False)
-    file_size: int = SQLField(sa_column_kwargs={"type_": "BIGINT"}, nullable=False)
-    triage_score: float = SQLField(nullable=False)
+    file_size: int = SQLField(sa_column=Column(BigInteger, nullable=False))
+    triage_score: Optional[float] = SQLField(default=None, nullable=True)
     final_score: Optional[int] = SQLField(default=None, nullable=True)
-    uploaded_at: datetime = SQLField(default_factory=datetime.utcnow, nullable=False)
+    status: str = SQLField(default="QUEUED", max_length=50, nullable=False, index=True)
+    uploaded_at: datetime = SQLField(default_factory=lambda: datetime.now(UTC), nullable=False)
 
     # Relationships
     slices: List["SmaliSlice"] = Relationship(back_populates="apk", cascade_delete=True)
@@ -53,10 +58,10 @@ class CertInReport(SQLModel, table=True):
 
     report_id: Optional[int] = SQLField(default=None, primary_key=True)
     apk_hash: str = SQLField(foreign_key="apks.apk_hash", max_length=64, unique=True, nullable=False, ondelete="CASCADE")
-    mitre_attack_json: Dict[str, Any] = SQLField(default_factory=dict, sa_type=JSON, nullable=False)
+    mitre_attack_json: Dict[str, Any] = SQLField(default_factory=dict, sa_column=Column(JSON, nullable=False))
     report_pdf_path: str = SQLField(max_length=512, nullable=False)
     compliance_status: str = SQLField(max_length=50, nullable=False)
-    created_at: datetime = SQLField(default_factory=datetime.utcnow, nullable=False)
+    created_at: datetime = SQLField(default_factory=lambda: datetime.now(UTC), nullable=False)
 
     # Relationships
     apk: APK = Relationship(back_populates="report")

@@ -1,0 +1,22 @@
+{
+  "syscalls": [
+    "openat",
+    "connect",
+    "sendto"
+  ],
+  "ips": [
+    "203.0.113.10"
+  ],
+  "sockets": [
+    "tcp://203.0.113.10:443"
+  ],
+  "file_writes": [
+    "/data/user/0/com.fake/cache/payload.dex"
+  ],
+  "evasion_signals": [],
+  "observed_sms_exfiltration": true,
+  "observed_c2_connection": true,
+  "observed_banking_data_access": false,
+  "observed_root_escalation": false,
+  "observed_runtime_dex_loading": true
+}
