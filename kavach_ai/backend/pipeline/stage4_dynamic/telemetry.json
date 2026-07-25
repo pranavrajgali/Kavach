@@ -1,0 +1,32 @@
+{
+  "objection_root_bypass": true,
+  "objection_ssl_pinning_bypass": true,
+  "ebpf_telemetry": {
+    "syscalls": [
+      "sys_clone",
+      "sys_execve",
+      "sys_socket",
+      "sys_connect",
+      "sys_write",
+      "sys_openat"
+    ],
+    "files_accessed": [
+      "/data/user/0/banking_trojan_sample.apk/shared_prefs/config.xml",
+      "/proc/self/maps",
+      "/system/bin/app_process32"
+    ],
+    "network_connections": [
+      {
+        "ip": "198.51.100.42",
+        "port": 4444,
+        "protocol": "TCP"
+      },
+      {
+        "ip": "8.8.8.8",
+        "port": 53,
+        "protocol": "UDP"
+      }
+    ]
+  },
+  "execution_mode": "SIMULATION_FALLBACK"
+}

@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@theme inline {
+    --font-heading: 'Inter', sans-serif;
+    --font-sans: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    
+    --color-background: #09090B;
+    --color-foreground: #FAFAFA;
+    
+    --color-card: #121215;
+    --color-card-foreground: #FAFAFA;
+    
+    --color-popover: #121215;
+    --color-popover-foreground: #FAFAFA;
+    
+    --color-primary: #3B82F6;
+    --color-primary-foreground: #FAFAFA;
+    
+    --color-secondary: #1F1F23;
+    --color-secondary-foreground: #FAFAFA;
+    
+    --color-muted: #1F1F23;
+    --color-muted-foreground: #A1A1AA;
+    
+    --color-accent: #27272A;
+    --color-accent-foreground: #FAFAFA;
+    
+    --color-destructive: #EF4444;
+    --color-destructive-foreground: #FAFAFA;
+    
+    --color-border: #27272A;
+    --color-input: #1F1F23;
+    --color-ring: rgba(59, 130, 246, 0.4);
+    
+    --radius-lg: 0px;
+    --radius-md: 0px;
+    --radius-sm: 0px;
+}
+
+:root {
+    --background: #09090B;
+    --foreground: #FAFAFA;
+    --card: #121215;
+    --card-foreground: #FAFAFA;
+    --popover: #121215;
+    --popover-foreground: #FAFAFA;
+    --primary: #3B82F6;
+    --primary-foreground: #FAFAFA;
+    --secondary: #1F1F23;
+    --secondary-foreground: #FAFAFA;
+    --muted: #1F1F23;
+    --muted-foreground: #A1A1AA;
+    --accent: #27272A;
+    --accent-foreground: #FAFAFA;
+    --destructive: #EF4444;
+    --destructive-foreground: #FAFAFA;
+    --border: #27272A;
+    --input: #1F1F23;
+    --ring: rgba(59, 130, 246, 0.4);
+    --radius: 0px;
+    
+    --sidebar: #09090B;
+    --sidebar-foreground: #A1A1AA;
+    --sidebar-primary: #3B82F6;
+    --sidebar-primary-foreground: #FAFAFA;
+    --sidebar-accent: #1F1F23;
+    --sidebar-accent-foreground: #FAFAFA;
+    --sidebar-border: #27272A;
+    --sidebar-ring: rgba(59, 130, 246, 0.4);
+}
+
+body {
+    background: radial-gradient(circle at 50% 50%, #18181B 0%, #09090B 100%) !important;
+    min-height: 100vh;
+}

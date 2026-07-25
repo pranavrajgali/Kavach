@@ -18,6 +18,7 @@ Please refer to these documents before starting development:
 
 * Technical Architecture: Outlines training vs. runtime pipelines and FastAPI non-blocking design. Refer to [ARCHITECTURE.md](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/ARCHITECTURE.md).
 * Complete Build Guide: Specifies third-party tools, BCNF database schemas, features, and constraints. Refer to [BUILD_GUIDE.md](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/BUILD_GUIDE.md).
+* Dynamic Sandbox Detonation Walkthrough: Details the eBPF kernel tracing, Frida bypass hooks, SSE log streaming, and Recharts frontend integration. Refer to [DYNAMIC_ANALYSIS_WALKTHROUGH.md](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/DYNAMIC_ANALYSIS_WALKTHROUGH.md).
 * Team Integration Roadmap: Defines chronological task dependencies and mock integrations across tracks. Refer to [integration_roadmap.md](file:///c:/Users/Admin/Documents/Projects/Kavach/docs/plans/integration_roadmap.md).
 
 ## Developer Track Assignments
@@ -73,3 +74,65 @@ We support two modes of model fine-tuning:
    ```
 
 All fine-tuned weights and model configurations will be saved directly into the local backend cache: `kavach_ai/backend/pipeline/stage3_ml/weights/`.
+
+## Running the Dynamic Analysis Pipeline Test
+
+You can verify the dynamic analysis pipeline (sandbox detonation, hook injection, and telemetry serialization) by running the automated test script at the root:
+
+```bash
+python run_dynamic_test.py
+```
+
+This script executes the Stage 4 pipeline (either using a connected emulator/device via ADB, or falling back automatically to high-fidelity simulated telemetry) and prints the BCNF-ready telemetry payload to the terminal.
+
+## Running the Dynamic Analysis with the UI
+
+Kavach.ai supports two user interfaces for dynamic analysis and detonation monitoring: the modern **React (Vite) Dashboard** (recommended) and the **Streamlit Dashboard**.
+
+### 1. Starting the FastAPI Backend Server
+Before running either UI, start the FastAPI orchestrator backend using the project virtual environment:
+
+**Option A: Run directly using the virtual environment interpreter**
+```bash
+# Navigate to the package directory
+cd kavach_ai
+
+# Start the uvicorn server via python module using relative path to venv
+..\venv\Scripts\python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+**Option B: Activate the virtual environment in PowerShell first**
+```powershell
+# Navigate to the package directory
+cd kavach_ai
+
+# Activate the venv
+..\venv\Scripts\Activate.ps1
+
+# Start the uvicorn server
+uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+The API documentation will be available at `http://127.0.0.1:8000/docs`.
+
+### 2. Launching the React (Vite) UI Dashboard (Recommended)
+The React dashboard communicates directly with the FastAPI server via Server-Sent Events (SSE) to display real-time terminal telemetry logs and interactive Recharts visualizations:
+```bash
+# Navigate to the frontend directory
+cd kavach_ai/frontend
+
+# Install dependencies (on first run)
+npm install
+
+# Start the development server
+npm run dev
+```
+Open `http://localhost:5173` in your browser. Drag and drop your `.apk` file into the upload zone to initiate the live dynamic sandbox detonation stream.
+
+### 3. Launching the Streamlit UI Dashboard
+Alternatively, you can run the Streamlit-based sandbox dashboard:
+```bash
+# From the project root with the virtual environment activated
+streamlit run kavach_ai/frontend_streamlit/app.py
+```
+Open the printed local URL (typically `http://localhost:8501`) to interact with the Streamlit version of the dashboard.
+

@@ -50,7 +50,7 @@ graph TD
 * **Goal:** Construct the separate extraction tools (Static CFGs and Dynamic Sandboxes).
 * **Core Tasks:**
   * **[Abhinav / Track 2]** Implement APKTool/JADX wrappers and extract raw Dalvik CFGs.
-  * **[Galipalli / Track 1]** Set up MobSF container and Frida scripts. Trigger ADB commands to detonate APKs and export logs.
+  * **[Galipalli / Track 1]** Set up native ADB detonation and Frida scripts. Trigger ADB commands to detonate APKs and export logs.
 * **LLM Tip:** *These two tracks are independent. Develop them in isolation. Use local mock files to verify outputs.*
 
 ### 🧠 Phase 3: ML Inference & Attribution (Days 6 - 7)

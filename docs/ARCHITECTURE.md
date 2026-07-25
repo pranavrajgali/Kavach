@@ -30,7 +30,7 @@ Uploaded APK ──► Stage 1: Manifest Triage ──► Stage 4: SecureBERT In
                             │                                                                │
                             ▼                                                                ▼
                  Stage 2: Local Dynamic Sandbox ─────────────────────► Stage 6: Telemetry Fusion & Merge
-                  (MobSF + Objection + eBPF)                               (Contradiction overrides)
+                  (ADB + Frida + eBPF Sandbox)                         (Contradiction overrides)
                                                                                      │
                                                                                      ▼
                                                                         Stage 7: LLaMA-3 Groq Compiler
@@ -99,8 +99,8 @@ Rather than maintaining a persistent connection, the Streamlit client uses its `
   * **Smali Fallback:** If decompiling triggers abstract syntax tree (AST) crashes due to malformed ZIP headers or obfuscation tactics, Kavach.ai falls back to extracting raw Smali instructions, preserving raw Dalvik opcodes.
   * **JNI Bridge Mapping:** The static scan traverses compiled `.so` binaries, resolving export symbols using the `Java_package_class_method` convention to map transitions between the Dalvik runtime and compiled native libraries.
   * **Binary Payload Byte-Scanning (.so files):** Scans the APK's `/lib` directory for compiled C/C++ Shared Object (`.so`) libraries loaded via `System.loadLibrary()`. Kavach.ai runs an ELF parser/sub-process to scan native binary bytes for sensitive system hooks or socket connection signatures, alerting the dynamic track to monitor these triggers.
-* **Stage 2B: Local Dynamic Sandbox: MobSF + Objection + eBPF (`backend/pipeline/stage4_dynamic/`)**
-  * **MobSF Environment Management:** MobSF acts as the environment manager, orchestrating the local Android emulator, installing the malicious APK, and starting the Frida server on the device.
+* **Stage 2B: Local Dynamic Sandbox: Native ADB + Frida + eBPF (`backend/pipeline/stage4_dynamic/`)**
+  * **Native ADB Environment Management:** Kavach.ai acts as the environment manager, orchestrating the local Android emulator via ADB subprocess commands, installing the target APK, and spawning the Frida server on the device.
   * **Objection User-Land Breacher:** Spawns an `objection` subprocess to disable root check and SSL pinning (`objection -g <package_name> explore -s "android root disable" -s "android sslpinning disable"`), removing the malware's surface defenses.
   * **eBPF Kernel-Land Stealth Observer (Roadmap Feature):** Designed to pre-load a precompiled eBPF/bpftrace probe into the emulator's Linux kernel using root-level ADB commands prior to application launch. Because eBPF runs in kernel-space, it is invisible to user-land anti-Frida/anti-analysis checks, silently logging every system call, file I/O, and network connection.
   * **Time Dilution & Intent Broadcasts:** Intercepts runtime delays (e.g. `Thread.sleep`) and triggers system intents (such as `BOOT_COMPLETED` or `android.intent.action.BATTERY_LOW`) via ADB to force dormant malware components to wake up and execute immediately.
