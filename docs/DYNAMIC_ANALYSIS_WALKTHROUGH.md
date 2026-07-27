@@ -71,17 +71,18 @@ The core dynamic pipeline scripts reside under [kavach_ai/backend/pipeline/stage
 
 ### 3.2. Detonation Orchestrator: `detonate.py`
 *   **File Link**: [detonate.py](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/pipeline/stage4_dynamic/detonate.py)
-*   **Primary Responsibility**: Manages the Android lifecycle (ADB calls, Frida processes, intent broadcasts).
+*   **Primary Responsibility**: Manages the Android sandbox lifecycle (ADB deployments, Frida instrumentation, permission/admin management, and intent broadcasts).
 *   **Core Operations**:
-    *   `_check_device_connected`: Runs `adb devices` to identify if an active emulator/device is connected. If none is found, it logs a warning and shifts into a high-fidelity **Simulation Mode** to prevent execution crashes during sandbox dry runs.
-    *   `install_apk` / `uninstall_apk`: Runs subprocess commands `adb install -r <apk>` and `adb uninstall <package>` to handle application deployment.
-    *   `spawn_frida_session`: Starts Frida in a background daemon via `subprocess.Popen` using command arguments: `frida -U -f <package_name> -l <script_path> --no-pause`.
-    *   `trigger_intents`: Executes activity manager shell commands (`am broadcast`) to simulate events that activate banking malware:
-        *   `android.intent.action.BOOT_COMPLETED` (Autostart triggers)
-        *   `android.intent.action.BATTERY_LOW` (Triggers used by trojans to request permissions under power-saving cover)
-        *   `monkey` launcher: Forces the main user-space activity to start.
+    *   `_check_device_connected`: Runs `adb devices` to identify if an active emulator/device is connected. It strictly filters active `"device"` states, ignoring `"offline"` or `"unauthorized"` entries.
+    *   `_get_device_abi`: Queries the device's CPU architecture via `adb shell getprop ro.product.cpu.abi` (falling back to `ro.product.cpu.abilist`) to dynamically construct paths in logs and telemetry.
+    *   `_strip_native_libraries`: Extracts the APK and removes the `/lib` directory (repacking using standard `zipfile` utilities) to prevent architecture-mismatch installation failures (`INSTALL_FAILED_NO_MATCHING_ABIS`).
+    *   `install_apk`: Implements a 3-attempt retry loop that handles APK deployment. If validation fails due to signatures (`INSTALL_PARSE_FAILED_NO_CERTIFICATES`), it dynamically runs `jarsigner` to resign the APK. If it fails due to architecture mismatches, it invokes the native library stripper.
+    *   `_auto_activate_device_admin`: Programmatically queries the package for any receivers registered to handle `android.app.action.DEVICE_ADMIN_ENABLED` and activates them programmatically using `adb shell dpm set-active-admin` without prompting the user.
+    *   `_dismiss_system_popups`: Simulates Enter keypresses (`adb shell input keyevent 66`) to dismiss legacy system compatibility overlays.
+    *   `spawn_frida_session`: Resolves the `frida` CLI binary dynamically within the active host python virtual environment and spawns the instrumentation runner.
+    *   `trigger_intents`: Executes activity manager shell commands (`am broadcast`) to simulate events that activate banking malware, and starts the package main activity using the `monkey` runner configured with `--ignore-crashes`, `--ignore-timeouts`, and `--ignore-security-exceptions` to tolerate system interruptions.
     *   `detonate_apk`: Orchestrates the sequence synchronously:
-        `Install` $\rightarrow$ `Spawn Frida Hooks` $\rightarrow$ `Wait 3s (Injection Window)` $\rightarrow$ `Trigger Intents` $\rightarrow$ `Wait 10s (Observation Window)` $\rightarrow$ `Terminate Frida` $\rightarrow$ `Uninstall App`.
+        `Install` $\rightarrow$ `Grant Permissions` $\rightarrow$ `Auto-activate Device Admin` $\rightarrow$ `Spawn Frida Hooks` $\rightarrow$ `Trigger Intents` $\rightarrow$ `Dismiss Overlays` $\rightarrow$ `Wait 10s (Observation)` $\rightarrow$ `Uninstall App`.
 
 ### 3.3. eBPF Tracker: `scripts/ebpf_trace.py`
 *   **File Link**: [ebpf_trace.py](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/pipeline/stage4_dynamic/scripts/ebpf_trace.py)
@@ -97,11 +98,15 @@ The core dynamic pipeline scripts reside under [kavach_ai/backend/pipeline/stage
 ### 3.4. Frida Hook Script: `scripts/frida_bypass.js`
 *   **File Link**: [frida_bypass.js](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/pipeline/stage4_dynamic/scripts/frida_bypass.js)
 *   **Primary Responsibility**: Deactivates anti-sandboxing controls (Root-checking and SSL Pinning) so the application executes its true payload.
+*   **Stability & Thread Safety Enhancements**:
+    *   **Thread-Local Re-entrancy Guards**: Employs a Java `ThreadLocal` object (boxed `java.lang.Boolean`) to prevent infinite recursion/deadlocks inside filesystem hook wrappers (`FileInputStream`/`FileOutputStream`).
+    *   **Safe Exception Properties**: Avoids crash conditions when intercepting target app exceptions by safely verifying class presence using `typeof e.$className.includes === 'function'`.
+    *   **Socket Type Verification**: Bypasses local/IPC cast errors in `Socket.connect` by verifying address arguments using `InetSocketAddress.class.isInstance(endpoint)`.
 *   **Hooks Implemented**:
     1.  **File existence check override (`java.io.File.exists`)**: Intercepts paths matching root binaries (`su`, `busybox`, `SuperSU`, `Superuser.apk`) and forces a `false` return.
     2.  **Runtime command execution override (`java.lang.Runtime.exec`)**: Blocks commands executing `su` or `busybox` and throws a fake `IOException` to simulate a standard non-rooted environment.
     3.  **System build property spoof (`android.os.SystemProperties.get`)**: Intercepts requests for `ro.build.tags` and rewrites `test-keys` (indicating custom/rooted ROMs) to `release-keys`.
-    4.  **SSL TrustManager Override (`javax.net.ssl.SSLContext.init`)**: Registers a custom `X509TrustManager` that skips certification verification, allowing HTTP proxies (like Mitmproxy or MobSF) to capture encrypted traffic.
+    4.  **SSL TrustManager Override (`javax.net.ssl.SSLContext.init`)**: Registers a custom `X509TrustManager` that skips certification verification, allowing HTTP proxies (like Mitmproxy) to capture encrypted traffic.
     5.  **OkHttp3 Pinning Bypass (`okhttp3.CertificatePinner.check`)**: Attempts to locate OkHttp class definitions within the active classloader and nullifies the pinning checker.
 
 ---

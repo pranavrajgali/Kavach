@@ -100,11 +100,16 @@ Rather than maintaining a persistent connection, the Streamlit client uses its `
   * **JNI Bridge Mapping:** The static scan traverses compiled `.so` binaries, resolving export symbols using the `Java_package_class_method` convention to map transitions between the Dalvik runtime and compiled native libraries.
   * **Binary Payload Byte-Scanning (.so files):** Scans the APK's `/lib` directory for compiled C/C++ Shared Object (`.so`) libraries loaded via `System.loadLibrary()`. Kavach.ai runs an ELF parser/sub-process to scan native binary bytes for sensitive system hooks or socket connection signatures, alerting the dynamic track to monitor these triggers.
 * **Stage 2B: Local Dynamic Sandbox: Native ADB + Frida + eBPF (`backend/pipeline/stage4_dynamic/`)**
-  * **Native ADB Environment Management:** Kavach.ai acts as the environment manager, orchestrating the local Android emulator via ADB subprocess commands, installing the target APK, and spawning the Frida server on the device.
-  * **Objection User-Land Breacher:** Spawns an `objection` subprocess to disable root check and SSL pinning (`objection -g <package_name> explore -s "android root disable" -s "android sslpinning disable"`), removing the malware's surface defenses.
+  * **Native ADB Environment Management:** Kavach.ai acts as the environment manager, orchestrating the local Android emulator via ADB subprocess commands. It dynamically queries the connected device's target CPU ABI (e.g. `x86`, `arm64-v8a`) to map telemetry outputs.
+  * **Dynamic Local Executable Lookup:** Resolves the path of the `frida` CLI executable dynamically using the host's active python virtual environment's execution directory (via `sys.executable`).
+  * **Architectural ABI & Signature Adaptation:** Implements a three-attempt installation loop that automatically intercepts signature validation errors (`INSTALL_PARSE_FAILED_NO_CERTIFICATES`) by resigning the binary, and architecture mismatches (`INSTALL_FAILED_NO_MATCHING_ABIS`) by stripping the entire `/lib` directory to force Android to run the bytecode natively on the host's emulator architecture.
+  * **Programmatic Privilege & Bypasses:**
+    * **Device Administrator Auto-Activation:** Queries registered receivers for `DEVICE_ADMIN_ENABLED` intents and registers them dynamically using `adb shell dpm set-active-admin` to prevent UI blocks.
+    * **System Overlay Auto-Dismissal:** Injects keyevents (Enter `66`) via `adb shell input` to auto-dismiss legacy system compatibility warnings.
+    * **Fault-Tolerant Detonation:** Uses `--ignore-crashes`, `--ignore-timeouts`, and `--ignore-security-exceptions` flags in the `monkey` launcher tool to maintain telemetry gather stream continuity.
   * **eBPF Kernel-Land Stealth Observer (Roadmap Feature):** Designed to pre-load a precompiled eBPF/bpftrace probe into the emulator's Linux kernel using root-level ADB commands prior to application launch. Because eBPF runs in kernel-space, it is invisible to user-land anti-Frida/anti-analysis checks, silently logging every system call, file I/O, and network connection.
   * **Time Dilution & Intent Broadcasts:** Intercepts runtime delays (e.g. `Thread.sleep`) and triggers system intents (such as `BOOT_COMPLETED` or `android.intent.action.BATTERY_LOW`) via ADB to force dormant malware components to wake up and execute immediately.
-  * **Frida Hook Synchronization:** Syncs script injection directly onto `System.loadLibrary` initialization to drop execution interceptors smoothly without pointer crashes, and uses clock dilution to fast-forward execution delay APIs.
+  * **Frida Hook Synchronization:** Syncs script injection directly onto `System.loadLibrary` initialization to drop execution interceptors smoothly without pointer crashes, using Java `ThreadLocal` re-entrancy guards to prevent high-frequency stream hooks from causing stack overflows or infinite loops, and boxing JS types to Java classes.
 * **Stage 4: Local SecureBERT-2.0 Inference (`backend/pipeline/stage3_ml/`)**
   * **Local PyTorch Execution:** SecureBERT-2.0 is hosted 100% locally using PyTorch, loading model weights and adapters directly from `backend/pipeline/stage3_ml/weights/` at startup. This guarantees sub-second inference speeds and ensures zero-day malware code slices are never leaked to external public clouds.
   * **Fallback Classifier:** If executing on standard CPU or offline without weight initialization, it activates a fallback rule-based similarity hashing system to match code slices against known threat heuristics, outputting a deterministic risk probability between `0.0` and `1.0`.
@@ -189,7 +194,7 @@ kavach_ai/
 ├── pyproject.toml              # Modern Python dependency management (uv/poetry)
 │
 ├── infrastructure/             # DevOps & Local Environment
-│   ├── docker-compose.yml      # Spins up PostgreSQL, MobSF, & Redis containers natively
+│   ├── docker-compose.yml      # Spins up PostgreSQL & Redis containers natively
 │   ├── Dockerfile.api
 │   └── Dockerfile.streamlit
 │

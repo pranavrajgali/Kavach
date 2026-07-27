@@ -10,15 +10,25 @@ export interface NetworkConnection {
   ip: string;
   port: number;
   protocol: 'TCP' | 'UDP';
+  status?: 'connected' | 'attempted' | 'refused';
+}
+
+export interface DnsResolution {
+  domain: string;
+  resolved_ip?: string;
+  status: 'resolved' | 'nxdomain' | 'timeout' | 'failed';
 }
 
 export interface EbpfTelemetry {
   syscalls: string[];
   files_accessed: string[];
   network_connections: NetworkConnection[];
+  dns_resolutions?: DnsResolution[];
+  permissions_exercised?: string[];
 }
 
 export interface TelemetryPayload {
+  execution_mode?: 'LIVE_ADB_FRIDA' | 'SIMULATION_FALLBACK';
   objection_root_bypass: boolean;
   objection_ssl_pinning_bypass: boolean;
   ebpf_telemetry: EbpfTelemetry;
@@ -27,14 +37,16 @@ export interface TelemetryPayload {
 
 interface DetonationContextType {
   status: 'landing' | 'analyzing' | 'completed' | 'error';
-  currentView: 'dashboard' | 'scorecard';
+  currentView: 'dashboard' | 'scorecard' | 'static_scan';
   apkDetails: ApkDetails | null;
   logs: string[];
   telemetry: TelemetryPayload | null;
   simulationMode: boolean;
   isAdbConnected: boolean;
   setSimulationMode: (mode: boolean) => void;
-  setCurrentView: (view: 'dashboard' | 'scorecard') => void;
+  detonationDuration: number;
+  setDetonationDuration: (duration: number) => void;
+  setCurrentView: (view: 'dashboard' | 'scorecard' | 'static_scan') => void;
   viewScorecard: () => void;
   viewDashboard: () => void;
   loadRecentScan: () => Promise<void>;
@@ -46,12 +58,13 @@ const DetonationContext = createContext<DetonationContextType | undefined>(undef
 
 export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [status, setStatus] = useState<DetonationContextType['status']>('landing');
-  const [currentView, setCurrentView] = useState<'dashboard' | 'scorecard'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'scorecard' | 'static_scan'>('dashboard');
   const [apkDetails, setApkDetails] = useState<ApkDetails | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [telemetry, setTelemetry] = useState<TelemetryPayload | null>(null);
   const [simulationMode, setSimulationMode] = useState<boolean>(false);
   const [isAdbConnected, setIsAdbConnected] = useState<boolean>(true);
+  const [detonationDuration, setDetonationDuration] = useState<number>(10);
 
   // Poll for emulator connection status on mount (simple mock)
   useEffect(() => {
@@ -109,7 +122,7 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     formData.append('file', file);
 
     try {
-      const response = await fetch(`/api/detonate-stream?simulation=${simulationMode}`, {
+      const response = await fetch(`/api/detonate-stream?simulation=${simulationMode}&duration=${detonationDuration}`, {
         method: 'POST',
         body: formData,
       });
@@ -174,6 +187,8 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         simulationMode,
         isAdbConnected,
         setSimulationMode,
+        detonationDuration,
+        setDetonationDuration,
         setCurrentView,
         viewScorecard,
         viewDashboard,

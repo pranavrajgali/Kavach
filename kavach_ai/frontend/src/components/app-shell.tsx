@@ -12,7 +12,8 @@ interface AppShellProps {
 export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const { 
     simulationMode, setSimulationMode, isAdbConnected, reset, 
-    currentView, viewScorecard, viewDashboard 
+    currentView, viewScorecard, viewDashboard, setCurrentView,
+    detonationDuration, setDetonationDuration
   } = useDetonation();
 
   return (
@@ -45,10 +46,17 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 <LayoutGrid className="w-3.5 h-3.5" />
                 Dynamic Sandbox
               </button>
-              <div className="flex items-center gap-3 px-3 py-1.5 text-xs font-medium text-muted-foreground cursor-not-allowed text-left">
+              <button 
+                onClick={() => setCurrentView('static_scan')}
+                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
+                  currentView === 'static_scan'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                }`}
+              >
                 <FileCode className="w-3.5 h-3.5" />
                 Static & JNI Scan
-              </div>
+              </button>
               <div className="flex items-center gap-3 px-3 py-1.5 text-xs font-medium text-muted-foreground cursor-not-allowed text-left">
                 <Cpu className="w-3.5 h-3.5" />
                 BERT ML Classifier
@@ -160,6 +168,29 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   Enable Simulation Mode
                 </span>
               </label>
+
+              {/* Detonation Duration Selector */}
+              <div className="pt-2 border-t border-border space-y-1.5">
+                <span className="text-[9px] font-semibold text-muted-foreground uppercase block">
+                  Detonation Duration
+                </span>
+                <div className="grid grid-cols-3 gap-1 bg-background p-0.5 border border-border">
+                  {[10, 30, 60].map((sec) => (
+                    <button
+                      key={sec}
+                      type="button"
+                      onClick={() => setDetonationDuration(sec)}
+                      className={`text-[9px] font-medium py-1 px-1.5 transition-all text-center ${
+                        detonationDuration === sec
+                          ? 'bg-primary text-primary-foreground font-semibold'
+                          : 'text-muted-foreground hover:text-foreground bg-transparent'
+                      }`}
+                    >
+                      {sec}s
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div className="text-[9px] text-muted-foreground/60 text-center">

@@ -32,12 +32,15 @@ def run_dynamic_analysis_pipeline(apk_path: str, package_name: str, duration_sec
             "frida_bypass.js"
         )
         
-        orchestrator.detonate_apk(
+        success = orchestrator.detonate_apk(
             apk_path=apk_path,
             package_name=package_name,
             script_path=frida_script,
             duration_seconds=duration_seconds
         )
+        
+        if not success:
+            raise RuntimeError("Dynamic detonation failed. Verify target device setup, APK compatibility, and frida-server status.")
         
         # 3. Assemble actual dynamic telemetry
         syscalls = []

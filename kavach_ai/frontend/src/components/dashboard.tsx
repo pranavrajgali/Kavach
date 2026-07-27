@@ -4,6 +4,7 @@ import { UploadPanel } from '@/components/upload-panel';
 import { TerminalConsole } from '@/components/terminal-console';
 import { ReportView } from '@/components/report-view';
 import { KavachScorecard } from '@/components/kavach-scorecard';
+import { StaticView } from '@/components/static-view';
 import { AlertCircle } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
@@ -11,6 +12,10 @@ export const Dashboard: React.FC = () => {
 
   if (currentView === 'scorecard') {
     return <KavachScorecard />;
+  }
+
+  if (currentView === 'static_scan') {
+    return <StaticView />;
   }
 
   switch (status) {

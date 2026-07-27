@@ -39,17 +39,28 @@ export const KavachScorecard: React.FC = () => {
   if (objectionSsl) penalty += 25;
   
   filesAccessed.forEach(f => {
-    if (f.includes('app_process') || f.includes('system')) penalty += 15;
-    else if (f.includes('shared_prefs') || f.includes('config')) penalty += 10;
-    else if (f.includes('/proc/')) penalty += 5;
+    if (f.includes('app_process') || f.includes('system') || f.includes('su')) {
+      penalty += 15;
+    } else if (f.includes('shared_prefs') || f.includes('config')) {
+      penalty += 1; // Minor penalty for preferences/configs
+    } else if (f.includes('/proc/')) {
+      penalty += 2;
+    }
   });
 
   networkConns.forEach(c => {
-    if (c.port === 4444) penalty += 35;
-    else penalty += 5;
+    if (c.port === 4444) {
+      penalty += 35;
+    } else if ([80, 443, 8080, 53].includes(c.port)) {
+      penalty += 0; // Standard ports are benign
+    } else {
+      penalty += 3; // Minor penalty for other ports
+    }
   });
 
-  if (syscalls.includes('sys_execve')) penalty += 10;
+  if (syscalls.includes('sys_execve') && objectionRoot) {
+    penalty += 10;
+  }
 
   // Base score calculation
   const rawScore = penalty === 0 ? 100 : Math.max(12, Math.min(98, 100 - penalty));

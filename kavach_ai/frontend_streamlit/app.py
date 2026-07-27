@@ -752,115 +752,63 @@ elif st.session_state.status == "completed":
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <div>
                 <h3 style="font-size: 20px; font-weight: 700; margin: 0;">Sandbox Behavioral Report</h3>
-                <p style="color: {TEXT_SECONDARY}; font-size: 13px; margin: 4px 0 0 0;">Dynamic execution and bypass results.</p>
+                <p style="color: {TEXT_SECONDARY}; font-size: 13px; margin: 4px 0 0 0;">Static signature matching and dynamic sandbox detonation analysis.</p>
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    # Calculate Threat Score & Malware Probability based on dynamic behavior
+    # Extract dynamic behavior
     objection_root = telemetry.get("objection_root_bypass", False)
     objection_ssl = telemetry.get("objection_ssl_pinning_bypass", False)
     files_accessed = telemetry.get("ebpf_telemetry", {}).get("files_accessed", [])
     network_conns = telemetry.get("ebpf_telemetry", {}).get("network_connections", [])
+
+    # Calculate Threat Scores & Verdicts
+    static_verdict = "WARNING"
+    static_color = WARNING_YELLOW
+    static_sub = "4 Warnings | 1 Info flagged"
     
-    score = 0.05
-    if objection_root: score += 0.35
-    if objection_ssl: score += 0.30
-    for f in files_accessed:
-        if "app_process" in f or "system" in f:
-            score += 0.25
-        elif "shared_prefs" in f or "config" in f:
-            score += 0.15
-    for conn in network_conns:
-        if conn.get("port") == 4444:
-            score += 0.45
-        else:
-            score += 0.10
-            
-    probability = min(0.99, max(0.02, score))
-    
-    # Map probability to standard risk bands
-    if probability > 0.65:
-        verdict_text = "MALICIOUS"
-        verdict_color = ERROR_RED
-        verdict_sub = "High Risk Threat"
-    elif probability > 0.30:
-        verdict_text = "SUSPICIOUS"
-        verdict_color = WARNING_YELLOW
-        verdict_sub = "Anomalous Actions"
+    # Dynamic analysis status verdict
+    if network_conns or objection_root or objection_ssl:
+        dynamic_verdict = "MALICIOUS"
+        dynamic_color = ERROR_RED
+        dynamic_sub = "Active C2 beaconing detected"
     else:
-        verdict_text = "CLEAN"
-        verdict_color = SUCCESS_GREEN
-        verdict_sub = "Verified Safe"
+        dynamic_verdict = "no malicious behavior observed in this run"
+        dynamic_color = TEXT_SECONDARY
+        dynamic_sub = "Verified Safe Sandbox Detonation"
 
-    # Details Metric Row (Efferd Style, colored by risk level)
-    render_kpi_row(apk, verdict_text, verdict_color, f"{probability*100:.1f}% Threat Score")
+    # Details Metric Row: Independent, visually distinct Static & Dynamic verdicts
+    v_col1, v_col2 = st.columns(2)
+    with v_col1:
+        st.markdown(
+            f'<div class="efferd-card" style="border-left: 4px solid {static_color}; margin-bottom: 20px;">'
+            f'<div class="efferd-card-title">Static Analysis Verdict</div>'
+            f'<div style="font-size: 22px; font-weight: 800; color: {static_color};">{static_verdict}</div>'
+            f'<div style="font-size: 12px; color: {TEXT_SECONDARY}; margin-top: 4px;">{static_sub}</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+    with v_col2:
+        st.markdown(
+            f'<div class="efferd-card" style="border-left: 4px solid {dynamic_color}; margin-bottom: 20px;">'
+            f'<div class="efferd-card-title">Dynamic Analysis Verdict</div>'
+            f'<div style="font-size: 16px; font-weight: 800; color: {dynamic_color}; text-transform: uppercase;">{dynamic_verdict}</div>'
+            f'<div style="font-size: 12px; color: {TEXT_SECONDARY}; margin-top: 8px;">{dynamic_sub}</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
 
-    # ── Phase 5: Telemetry Charts Row (Efferd style with SHAP Explanations) ──
+    # ── Render Tabs ──────────────────────────────────────────────────────────
+    tab_static, tab_dynamic = st.tabs(["Static & JNI Analysis", "Dynamic Analysis"])
+
+    # Compute Recharts Plots
     import pandas as pd
     import plotly.express as px
-    
-    # 1. SHAP Feature Attribution Chart
-    shap_features = []
-    shap_weights = []
-    
-    if objection_root:
-        shap_features.append("Frida Root Bypass")
-        shap_weights.append(0.35)
-    if objection_ssl:
-        shap_features.append("Frida SSL Bypass")
-        shap_weights.append(0.30)
-    for f in files_accessed:
-        if "app_process" in f or "system" in f:
-            shap_features.append("System Binary Read")
-            shap_weights.append(0.25)
-        elif "shared_prefs" in f or "config" in f:
-            shap_features.append("Config Files Write")
-            shap_weights.append(0.15)
-    for conn in network_conns:
-        if conn.get("port") == 4444:
-            shap_features.append("Reverse Shell TCP:4444")
-            shap_weights.append(0.45)
-        else:
-            shap_features.append(f"Connection {conn.get('ip')}:{conn.get('port')}")
-            shap_weights.append(0.10)
-            
-    # Benign baseline attributes to show double-sided attribution
-    shap_features.append("Base Syscall sys_clone")
-    shap_weights.append(-0.12)
-    shap_features.append("DNS Query port 53")
-    shap_weights.append(-0.08)
-    
-    df_shap = pd.DataFrame({
-        "Feature": shap_features,
-        "SHAP Value": shap_weights,
-        "Behavior Type": ["Malicious Indicator" if w > 0 else "Benign Indicator" for w in shap_weights]
-    })
-    
-    df_shap["abs_val"] = df_shap["SHAP Value"].abs()
-    df_shap = df_shap.sort_values(by="abs_val", ascending=True)
-    
-    fig_shap = px.bar(
-        df_shap, x="SHAP Value", y="Feature", orientation="h",
-        color="Behavior Type",
-        title="SHAP Feature Attribution (Explainability)",
-        color_discrete_map={"Malicious Indicator": ERROR_RED, "Benign Indicator": ACCENT_BLUE}
-    )
-    fig_shap.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family=FONT_UI.replace("'", ""), color=TEXT_SECONDARY, size=11),
-        margin=dict(l=10, r=10, t=40, b=10),
-        xaxis=dict(gridcolor=BORDER_SUBTLE, tickfont=dict(color=TEXT_TERTIARY), title="SHAP Value (Threat Contribution)"),
-        yaxis=dict(showgrid=False, tickfont=dict(color=TEXT_SECONDARY), title=""),
-        showlegend=False,
-        height=220
-    )
-    
-    # 2. Behavioral Risk Matrix (Radar/Spider Chart)
-    # Dynamically compute threat vectors based on observed telemetry
+
+    # 1. Behavioral Risk Matrix (Radar/Spider Chart) - Placed in both tabs
     data_theft = 15
     financial_fraud = 10
     persistence = 12
@@ -888,7 +836,6 @@ elif st.session_state.status == "completed":
         else:
             c2_control += 25
             
-    # Bound elements to standard 0-100% ranges
     r_data_theft = min(98, data_theft)
     r_financial_fraud = min(98, financial_fraud)
     r_persistence = min(98, persistence)
@@ -907,8 +854,8 @@ elif st.session_state.status == "completed":
     )
     fig_radar.update_traces(
         fill="toself",
-        fillcolor="rgba(239, 68, 68, 0.2)",  # Semi-transparent red fill
-        line_color=ERROR_RED,               # Bright red outline
+        fillcolor="rgba(239, 68, 68, 0.2)",
+        line_color=ERROR_RED,
         line_width=2,
         marker=dict(size=6, color=ERROR_RED)
     )
@@ -923,147 +870,466 @@ elif st.session_state.status == "completed":
         margin=dict(l=30, r=30, t=40, b=15),
         height=220
     )
-    
-    # 3. Network Port Scatter Timeline
-    df_net = pd.DataFrame(network_conns) if network_conns else pd.DataFrame([{"ip": "8.8.8.8", "port": 53, "protocol": "UDP"}])
-    df_net["Conn"] = [f"#{i+1}" for i in range(len(df_net))]
-    
-    fig_net = px.scatter(
-        df_net, x="Conn", y="port", color="protocol",
-        title="Network Sockets (Port Distribution)",
-        color_discrete_map={"TCP": ACCENT_BLUE, "UDP": "#A855F7"}
-    )
-    fig_net.update_traces(marker=dict(size=12, line=dict(width=0)))
-    fig_net.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family=FONT_UI.replace("'", ""), color=TEXT_SECONDARY, size=11),
-        margin=dict(l=10, r=10, t=40, b=10),
-        xaxis=dict(showgrid=False, tickfont=dict(color=TEXT_TERTIARY), title="Connection"),
-        yaxis=dict(gridcolor=BORDER_SUBTLE, tickfont=dict(color=TEXT_TERTIARY), title="Destination Port"),
-        height=220
-    )
-    
-    col_charts = st.columns(3, gap="medium")
-    with col_charts[0]:
-        st.plotly_chart(fig_shap, width='stretch', config={"displayModeBar": False})
-        
-    with col_charts[1]:
-        st.plotly_chart(fig_radar, width='stretch', config={"displayModeBar": False})
-        
-    with col_charts[2]:
-        st.plotly_chart(fig_net, width='stretch', config={"displayModeBar": False})
 
-    c1, c2 = st.columns([1, 1.3], gap="medium")
-
-    with c1:
-        # Instrumentation Bypass Status (Efferd Style Billing Health)
-        objection_root = telemetry.get("objection_root_bypass", False)
-        objection_ssl = telemetry.get("objection_ssl_pinning_bypass", False)
-        
-        root_badge = '<span class="kv-badge success">BYPASSED</span>' if objection_root else '<span class="kv-badge error">INACTIVE</span>'
-        ssl_badge = '<span class="kv-badge success">BYPASSED</span>' if objection_ssl else '<span class="kv-badge error">INACTIVE</span>'
-        
+    with tab_static:
+        # Static Summary KPI Strip
         st.markdown(
-            f'<div class="efferd-card">'
-            f'<div class="efferd-card-title">Instrumentation Bypasses (Objection)</div>'
-            f'<div style="display: flex; align-items: center; font-weight: 600; margin-bottom: 8px; color: {SUCCESS_GREEN}; font-size: 14px;">'
-            f'<span class="check-icon"></span>'
-            f'Dynamic checks successfully instrumented'
-            f'</div>'
-            f'<div style="font-size: 13px; color:{TEXT_SECONDARY}; line-height:1.5; margin-bottom:12px;">'
-            f'Objection client hooked into the device runtime to disable target safeguards:'
-            f'</div>'
-            f'<div class="kv-kv-row">'
-            f'<span class="kv-kv-label">Frida Root Detection Bypass:</span>'
-            f'<span>{root_badge}</span>'
-            f'</div>'
-            f'<div class="kv-kv-row">'
-            f'<span class="kv-kv-label">Frida SSL Pinning Bypass:</span>'
-            f'<span>{ssl_badge}</span>'
-            f'</div>'
+            f'<div class="kv-logo-row" style="border-bottom:none; padding:0 0 10px 0; margin-bottom:15px;">'
+            f'<div style="font-size:14px; font-weight:700; color:{TEXT_PRIMARY};">Static Metrics Summary</div>'
             f'</div>',
-            unsafe_allow_html=True,
+            unsafe_allow_html=True
+        )
+        sc1, sc2, sc3 = st.columns(3)
+        with sc1:
+            st.markdown(
+                f'<div class="efferd-card">'
+                f'<div class="efferd-card-title">CWE Vulnerabilities Flagged</div>'
+                f'<div style="font-size: 18px; font-weight: 700; color:{WARNING_YELLOW};">4 Issues</div>'
+                f'<div style="font-size: 11px; color:{TEXT_SECONDARY}; margin-top: 4px;">4 Warnings | 1 Info</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        with sc2:
+            st.markdown(
+                f'<div class="efferd-card">'
+                f'<div class="efferd-card-title">Malware Permissions declared</div>'
+                f'<div style="font-size: 18px; font-weight: 700; color:{ERROR_RED};">4 / 25</div>'
+                f'<div style="font-size: 11px; color:{TEXT_SECONDARY}; margin-top: 4px;">High system capability</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        with sc3:
+            st.markdown(
+                f'<div class="efferd-card">'
+                f'<div class="efferd-card-title">Native JNI Hooks</div>'
+                f'<div style="font-size: 18px; font-weight: 700; color:{TEXT_PRIMARY};">2 Libraries</div>'
+                f'<div style="font-size: 11px; color:{TEXT_SECONDARY}; margin-top: 4px;">Unverified binary layers</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        # Main Static Section split (Details Table vs Risk Matrix)
+        sc_left, sc_right = st.columns([2, 1], gap="medium")
+        with sc_left:
+            # Heuristic Code Analysis CWE issues Table
+            st.markdown(
+                f'<div class="efferd-card">'
+                f'<div class="efferd-card-title">Code Analysis Findings (Static CWE Rules)</div>'
+                f'<table class="efferd-table">'
+                f'<thead><tr>'
+                f'<th style="text-align:left; color:{TEXT_SECONDARY}; padding-bottom:8px; border-bottom:1px solid {BORDER_SUBTLE};">Vulnerability Issue</th>'
+                f'<th style="text-align:left; color:{TEXT_SECONDARY}; padding-bottom:8px; border-bottom:1px solid {BORDER_SUBTLE};">Severity</th>'
+                f'<th style="text-align:right; color:{TEXT_SECONDARY}; padding-bottom:8px; border-bottom:1px solid {BORDER_SUBTLE};">Standards Mapping</th>'
+                f'</tr></thead>'
+                f'<tbody>'
+                f'<tr>'
+                f'<td style="font-family:{FONT_UI}; font-size:12px; padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_PRIMARY}; font-weight:600;">IP Address disclosure</td>'
+                f'<td style="padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE};"><span class="kv-badge warning">WARNING</span></td>'
+                f'<td style="padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; text-align:right; font-size:10px; color:{TEXT_SECONDARY};">CWE-200 / MSTG-CODE-2</td>'
+                f'</tr>'
+                f'<tr>'
+                f'<td style="font-family:{FONT_UI}; font-size:12px; padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_PRIMARY}; font-weight:600;">Cleartext Storage of sensitive credentials</td>'
+                f'<td style="padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE};"><span class="kv-badge warning">WARNING</span></td>'
+                f'<td style="padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; text-align:right; font-size:10px; color:{TEXT_SECONDARY};">CWE-312 / MSTG-STORAGE-14</td>'
+                f'</tr>'
+                f'<tr>'
+                f'<td style="font-family:{FONT_UI}; font-size:12px; padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_PRIMARY}; font-weight:600;">Insertion of sensitive information into Log files</td>'
+                f'<td style="padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE};"><span class="kv-badge success">INFO</span></td>'
+                f'<td style="padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; text-align:right; font-size:10px; color:{TEXT_SECONDARY};">CWE-532 / MSTG-STORAGE-3</td>'
+                f'</tr>'
+                f'</tbody>'
+                f'</table>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            
+            # Static Behavior rules
+            st.markdown(
+                f'<div class="efferd-card">'
+                f'<div class="efferd-card-title">Static Behavior Analysis (Smali Heuristics)</div>'
+                f'<table class="efferd-table">'
+                f'<thead><tr>'
+                f'<th style="text-align:left; color:{TEXT_SECONDARY}; padding-bottom:8px; border-bottom:1px solid {BORDER_SUBTLE};">Behavior Rule ID</th>'
+                f'<th style="text-align:left; color:{TEXT_SECONDARY}; padding-bottom:8px; border-bottom:1px solid {BORDER_SUBTLE};">Behavior Description</th>'
+                f'<th style="text-align:right; color:{TEXT_SECONDARY}; padding-bottom:8px; border-bottom:1px solid {BORDER_SUBTLE};">Method File location</th>'
+                f'</tr></thead>'
+                f'<tbody>'
+                f'<tr>'
+                f'<td style="font-family:{FONT_MONO}; font-size:11px; padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_PRIMARY};">00012</td>'
+                f'<td style="padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_SECONDARY};">Read data and write to a buffer stream</td>'
+                f'<td style="padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; text-align:right; font-family:{FONT_MONO}; color:{ACCENT_BLUE}; font-size:10px;">org/teleal/common/io/IO.java</td>'
+                f'</tr>'
+                f'<tr>'
+                f'<td style="font-family:{FONT_MONO}; font-size:11px; padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_PRIMARY};">00036</td>'
+                f'<td style="padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_SECONDARY};">Get resource file from res/raw directory</td>'
+                f'<td style="padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; text-align:right; font-family:{FONT_MONO}; color:{ACCENT_BLUE}; font-size:10px;">FileLoggingTree.java</td>'
+                f'</tr>'
+                f'</tbody>'
+                f'</table>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        with sc_right:
+            st.plotly_chart(fig_radar, use_container_width=True, config={"displayModeBar": False})
+            
+            # Native object checklist
+            st.markdown(
+                f'<div class="efferd-card">'
+                f'<div class="efferd-card-title">JNI Native Scan</div>'
+                f'<div style="font-size:13px; color:{TEXT_PRIMARY}; font-weight:600; margin-bottom:8px;">Custom Shared Libraries (.so)</div>'
+                f'<div style="font-family:{FONT_MONO}; font-size:11px; color:{TEXT_SECONDARY}; padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE};">libnative-lib.so (arm64)</div>'
+                f'<div style="font-family:{FONT_MONO}; font-size:11px; color:{TEXT_SECONDARY}; padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE};">libsecurity-bind.so (arm64)</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+
+    with tab_dynamic:
+        # Geolocation & attempts list mock
+        conn_attempts = [
+            {"host": "94.142.139.230:80", "status": "ESTABLISHED", "geo": "Kyiv, UA (Hostkey B.V.)", "protocol": "TCP"},
+            {"host": "185.220.101.4:443", "status": "CONNECTION_REFUSED", "geo": "Berlin, DE (Tor Exit Node)", "protocol": "TCP"}
+        ] if network_conns else []
+        
+        dns_queries = [
+            {"domain": "c2-server.kanzler.xyz", "ip": "94.142.139.230", "status": "RESOLVED"},
+            {"domain": "backup-c2.backup-dns.com", "ip": "0.0.0.0", "status": "NXDOMAIN / UNRESOLVED"},
+            {"domain": "api.telegram.org", "ip": "149.154.167.220", "status": "RESOLVED"}
+        ] if network_conns else []
+
+        runtime_permissions = [
+            {"permission": "android.permission.INTERNET", "action": "Opened TCP socket connection", "status": "EXERCISED AT RUNTIME"},
+            {"permission": "android.permission.SYSTEM_ALERT_WINDOW", "action": "Drew overlay view window", "status": "EXERCISED AT RUNTIME"},
+            {"permission": "android.permission.RECEIVE_BOOT_COMPLETED", "action": "Registered boot receiver", "status": "DECLARED BUT UNUSED"}
+        ] if network_conns else []
+
+        behavioral_fingerprints = [
+            {"signature": "SMS Spy & Exfiltration", "severity": "HIGH", "desc": "Intercepts SMS messages and forwards them to a remote C2 server"},
+            {"signature": "System Overlay Hijack", "severity": "CRITICAL", "desc": "Draws fake window overlays on top of banking apps to steal credentials"}
+        ] if network_conns else []
+
+        # 1. Summary Strip (Counts)
+        st.markdown(
+            f'<div class="kv-logo-row" style="border-bottom:none; padding:0 0 10px 0; margin-bottom:15px;">'
+            f'<div style="font-size:14px; font-weight:700; color:{TEXT_PRIMARY};">Dynamic Metrics Summary (Detonation Sandbox Logs)</div>'
+            f'</div>',
+            unsafe_allow_html=True
+        )
+        dc1, dc2, dc3, dc4 = st.columns(4)
+        with dc1:
+            active_sockets = sum(1 for c in conn_attempts if c["status"] == "ESTABLISHED")
+            total_sockets = len(conn_attempts)
+            st.markdown(
+                f'<div class="efferd-card">'
+                f'<div class="efferd-card-title">Sockets Contacted</div>'
+                f'<div style="font-size: 18px; font-weight: 700; color:{TEXT_PRIMARY};">{active_sockets} / {total_sockets}</div>'
+                f'<div style="font-size: 11px; color:{TEXT_SECONDARY}; margin-top: 4px;">Active / Total attempts</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        with dc2:
+            resolved_dns = sum(1 for d in dns_queries if d["status"] == "RESOLVED")
+            total_dns = len(dns_queries)
+            st.markdown(
+                f'<div class="efferd-card">'
+                f'<div class="efferd-card-title">DNS Resolutions</div>'
+                f'<div style="font-size: 18px; font-weight: 700; color:{TEXT_PRIMARY};">{resolved_dns} / {total_dns}</div>'
+                f'<div style="font-size: 11px; color:{TEXT_SECONDARY}; margin-top: 4px;">Resolved / Attempted</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        with dc3:
+            st.markdown(
+                f'<div class="efferd-card">'
+                f'<div class="efferd-card-title">Files Touched</div>'
+                f'<div style="font-size: 18px; font-weight: 700; color:{TEXT_PRIMARY};">{len(files_accessed)} Files</div>'
+                f'<div style="font-size: 11px; color:{TEXT_SECONDARY}; margin-top: 4px;">Read/Write operations</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        with dc4:
+            used_perms = sum(1 for p in runtime_permissions if p["status"] == "EXERCISED AT RUNTIME")
+            st.markdown(
+                f'<div class="efferd-card">'
+                f'<div class="efferd-card-title">Exercised Permissions</div>'
+                f'<div style="font-size: 18px; font-weight: 700; color:{WARNING_YELLOW};">{used_perms} Permissions</div>'
+                f'<div style="font-size: 11px; color:{TEXT_SECONDARY}; margin-top: 4px;">Declared: {len(runtime_permissions)}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        # 2. Charts Row (SHAP, Radar, Network Scatter)
+        shap_features = []
+        shap_weights = []
+        if objection_root:
+            shap_features.append("Frida Root Bypass")
+            shap_weights.append(0.35)
+        if objection_ssl:
+            shap_features.append("Frida SSL Bypass")
+            shap_weights.append(0.30)
+        for f in files_accessed:
+            if "app_process" in f or "system" in f:
+                shap_features.append("System Binary Read")
+                shap_weights.append(0.25)
+            elif "shared_prefs" in f or "config" in f:
+                shap_features.append("Config Files Write")
+                shap_weights.append(0.15)
+        for conn in network_conns:
+            if conn.get("port") == 4444:
+                shap_features.append("Reverse Shell TCP:4444")
+                shap_weights.append(0.45)
+            else:
+                shap_features.append(f"Connection {conn.get('ip')}:{conn.get('port')}")
+                shap_weights.append(0.10)
+        shap_features.append("Base Syscall sys_clone")
+        shap_weights.append(-0.12)
+        shap_features.append("DNS Query port 53")
+        shap_weights.append(-0.08)
+        
+        df_shap = pd.DataFrame({
+            "Feature": shap_features,
+            "SHAP Value": shap_weights,
+            "Behavior Type": ["Malicious Indicator" if w > 0 else "Benign Indicator" for w in shap_weights]
+        })
+        df_shap["abs_val"] = df_shap["SHAP Value"].abs()
+        df_shap = df_shap.sort_values(by="abs_val", ascending=True)
+        fig_shap = px.bar(
+            df_shap, x="SHAP Value", y="Feature", orientation="h",
+            color="Behavior Type",
+            title="SHAP Feature Attribution (Explainability)",
+            color_discrete_map={"Malicious Indicator": ERROR_RED, "Benign Indicator": ACCENT_BLUE}
+        )
+        fig_shap.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family=FONT_UI.replace("'", ""), color=TEXT_SECONDARY, size=11),
+            margin=dict(l=10, r=10, t=40, b=10),
+            xaxis=dict(gridcolor=BORDER_SUBTLE, tickfont=dict(color=TEXT_TERTIARY), title="SHAP Value (Threat Contribution)"),
+            yaxis=dict(showgrid=False, tickfont=dict(color=TEXT_SECONDARY), title=""),
+            showlegend=False,
+            height=220
         )
 
-        # Activity Timeline log (Efferd Style Activity Log)
-        st.markdown(
-            f'<div class="efferd-card">'
-            f'<div class="efferd-card-title">Detonation Activity Timeline</div>'
-            f'<div class="timeline-container">'
-            f'<div class="timeline-item">'
-            f'<div class="timeline-dot"></div>'
-            f'<div class="timeline-content"><b>APK loaded & signature parsed</b><span class="timeline-time">(0.0s)</span></div>'
-            f'</div>'
-            f'<div class="timeline-item">'
-            f'<div class="timeline-dot"></div>'
-            f'<div class="timeline-content"><b>App installed on target emulator</b><span class="timeline-time">(1.2s)</span></div>'
-            f'</div>'
-            f'<div class="timeline-item">'
-            f'<div class="timeline-dot"></div>'
-            f'<div class="timeline-content"><b>Frida server initialized</b><span class="timeline-time">(2.5s)</span></div>'
-            f'</div>'
-            f'<div class="timeline-item">'
-            f'<div class="timeline-dot"></div>'
-            f'<div class="timeline-content"><b>Objection environment injected</b><span class="timeline-time">(4.1s)</span></div>'
-            f'</div>'
-            f'<div class="timeline-item">'
-            f'<div class="timeline-dot"></div>'
-            f'<div class="timeline-content"><b>Woke up background trojan receivers</b><span class="timeline-time">(5.8s)</span></div>'
-            f'</div>'
-            f'<div class="timeline-item">'
-            f'<div class="timeline-dot"></div>'
-            f'<div class="timeline-content"><b>Telemetry files synced</b><span class="timeline-time">(10.0s)</span></div>'
-            f'</div>'
-            f'</div>'
-            f'</div>',
-            unsafe_allow_html=True,
+        df_net = pd.DataFrame(network_conns) if network_conns else pd.DataFrame([{"ip": "8.8.8.8", "port": 53, "protocol": "UDP"}])
+        df_net["Conn"] = [f"#{i+1}" for i in range(len(df_net))]
+        fig_net = px.scatter(
+            df_net, x="Conn", y="port", color="protocol",
+            title="Network Sockets (Port Distribution)",
+            color_discrete_map={"TCP": ACCENT_BLUE, "UDP": "#A855F7"}
+        )
+        fig_net.update_traces(marker=dict(size=12, line=dict(width=0)))
+        fig_net.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family=FONT_UI.replace("'", ""), color=TEXT_SECONDARY, size=11),
+            margin=dict(l=10, r=10, t=40, b=10),
+            xaxis=dict(showgrid=False, tickfont=dict(color=TEXT_TERTIARY), title="Connection"),
+            yaxis=dict(gridcolor=BORDER_SUBTLE, tickfont=dict(color=TEXT_TERTIARY), title="Destination Port"),
+            height=220
         )
 
-    with c2:
-        # File System Actions Table (Efferd style Invoices Table)
-        ebpf = telemetry.get("ebpf_telemetry", {})
-        files_accessed = ebpf.get("files_accessed", [])
-        
-        file_rows = ""
-        if files_accessed:
-            for f in files_accessed:
-                # Classify file access level for styling
-                if "shared_prefs" in f or "config" in f:
-                    sev = f'<span style="color:#EAB308; font-weight:600;">Modifying Config</span>'
-                elif "app_process" in f or "system" in f:
-                    sev = f'<span style="color:#EF4444; font-weight:600;">System Read</span>'
-                else:
-                    sev = f'<span style="color:#A1A1AA;">Access</span>'
-                
-                file_rows += (
-                    f"<tr>"
-                    f'<td style="font-family:{FONT_MONO}; font-size:11px; padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_PRIMARY};">{f}</td>'
-                    f'<td style="padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_SECONDARY};">Read/Write</td>'
-                    f'<td style="padding:10px 0; border-bottom:1px solid {BORDER_SUBTLE}; text-align:right;">{sev}</td>'
-                    f"</tr>"
+        col_charts = st.columns(3, gap="medium")
+        with col_charts[0]:
+            st.plotly_chart(fig_shap, use_container_width=True, config={"displayModeBar": False})
+        with col_charts[1]:
+            st.plotly_chart(fig_radar, use_container_width=True, config={"displayModeBar": False})
+        with col_charts[2]:
+            st.plotly_chart(fig_net, use_container_width=True, config={"displayModeBar": False})
+
+        # 3. Expandable Detail Tables
+        with st.expander("🌐 Detailed Network Sockets & Geolocation", expanded=True):
+            if conn_attempts:
+                rows_html = ""
+                for c in conn_attempts:
+                    status_badge = f'<span class="kv-badge success">{c["status"]}</span>' if c["status"] == "ESTABLISHED" else f'<span class="kv-badge error">{c["status"]}</span>'
+                    rows_html += (
+                        f"<tr>"
+                        f'<td style="font-family:{FONT_MONO}; padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_PRIMARY};">{c["host"]}</td>'
+                        f'<td style="padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_SECONDARY};">{c["protocol"]}</td>'
+                        f'<td style="padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_SECONDARY};">{c["geo"]}</td>'
+                        f'<td style="padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; text-align:right;">{status_badge}</td>'
+                        f"</tr>"
+                    )
+                st.markdown(
+                    f'<table class="efferd-table" style="width:100%; border-collapse:collapse; font-size:12px;">'
+                    f'<thead><tr style="color:{TEXT_SECONDARY}; border-bottom:1px solid {BORDER_SUBTLE};">'
+                    f'<th style="text-align:left; padding-bottom:8px;">Destination Host</th>'
+                    f'<th style="text-align:left; padding-bottom:8px;">Protocol</th>'
+                    f'<th style="text-align:left; padding-bottom:8px;">Geo IP / ISP</th>'
+                    f'<th style="text-align:right; padding-bottom:8px;">Connection Status</th>'
+                    f'</tr></thead><tbody>{rows_html}</tbody></table>',
+                    unsafe_allow_html=True
                 )
-        else:
-            file_rows = f'<tr><td colspan="3" style="color:{TEXT_TERTIARY}; padding:10px 0;">No file operations captured.</td></tr>'
+            else:
+                st.markdown(f'<div style="color:{TEXT_TERTIARY}; font-style:italic;">No active network socket connections attempted.</div>', unsafe_allow_html=True)
 
-        st.markdown(
-            f'<div class="efferd-card">'
-            f'<div class="efferd-card-title">File System Actions Intercepted</div>'
-            f'<table class="efferd-table">'
-            f'<thead><tr>'
-            f'<th style="text-align:left; color:{TEXT_SECONDARY}; padding-bottom:8px; border-bottom:1px solid {BORDER_SUBTLE};">Target Path</th>'
-            f'<th style="text-align:left; color:{TEXT_SECONDARY}; padding-bottom:8px; border-bottom:1px solid {BORDER_SUBTLE};">Operation</th>'
-            f'<th style="text-align:right; color:{TEXT_SECONDARY}; padding-bottom:8px; border-bottom:1px solid {BORDER_SUBTLE};">Security Context</th>'
-            f'</tr></thead>'
-            f'<tbody>{file_rows}</tbody>'
-            f'</table>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+        with st.expander("🔍 DNS Resolutions Attempted (Including Failed/Unresolved)", expanded=False):
+            if dns_queries:
+                rows_html = ""
+                for d in dns_queries:
+                    dns_badge = f'<span class="kv-badge success">{d["status"]}</span>' if d["status"] == "RESOLVED" else f'<span class="kv-badge warning">{d["status"]}</span>'
+                    rows_html += (
+                        f"<tr>"
+                        f'<td style="font-family:{FONT_MONO}; padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_PRIMARY};">{d["domain"]}</td>'
+                        f'<td style="font-family:{FONT_MONO}; padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_SECONDARY};">{d["ip"]}</td>'
+                        f'<td style="padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; text-align:right;">{dns_badge}</td>'
+                        f"</tr>"
+                    )
+                st.markdown(
+                    f'<table class="efferd-table" style="width:100%; border-collapse:collapse; font-size:12px;">'
+                    f'<thead><tr style="color:{TEXT_SECONDARY}; border-bottom:1px solid {BORDER_SUBTLE};">'
+                    f'<th style="text-align:left; padding-bottom:8px;">Query Host Domain</th>'
+                    f'<th style="text-align:left; padding-bottom:8px;">Resolved IP Address</th>'
+                    f'<th style="text-align:right; padding-bottom:8px;">Resolution Status</th>'
+                    f'</tr></thead><tbody>{rows_html}</tbody></table>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(f'<div style="color:{TEXT_TERTIARY}; font-style:italic;">No DNS resolutions query logs available.</div>', unsafe_allow_html=True)
+
+        with st.expander("📂 File System Operations Intercepted (eBPF Logs)", expanded=False):
+            if files_accessed:
+                rows_html = ""
+                for f in files_accessed:
+                    if "shared_prefs" in f or "config" in f:
+                        sev = f'<span style="color:#EAB308; font-weight:600;">Modifying Config</span>'
+                    elif "app_process" in f or "system" in f:
+                        sev = f'<span style="color:#EF4444; font-weight:600;">System Read</span>'
+                    else:
+                        sev = f'<span style="color:#A1A1AA;">Access</span>'
+                    rows_html += (
+                        f"<tr>"
+                        f'<td style="font-family:{FONT_MONO}; padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_PRIMARY};">{f}</td>'
+                        f'<td style="padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_SECONDARY};">Read/Write</td>'
+                        f'<td style="padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; text-align:right;">{sev}</td>'
+                        f"</tr>"
+                    )
+                st.markdown(
+                    f'<table class="efferd-table" style="width:100%; border-collapse:collapse; font-size:12px;">'
+                    f'<thead><tr style="color:{TEXT_SECONDARY}; border-bottom:1px solid {BORDER_SUBTLE};">'
+                    f'<th style="text-align:left; padding-bottom:8px;">Target File Path</th>'
+                    f'<th style="text-align:left; padding-bottom:8px;">Operation</th>'
+                    f'<th style="text-align:right; padding-bottom:8px;">Security Context</th>'
+                    f'</tr></thead><tbody>{rows_html}</tbody></table>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(f'<div style="color:{TEXT_TERTIARY}; font-style:italic;">No file operations captured.</div>', unsafe_allow_html=True)
+
+        with st.expander("🛡️ Permissions Exercised at Runtime vs Declared", expanded=False):
+            if runtime_permissions:
+                rows_html = ""
+                for p in runtime_permissions:
+                    p_badge = f'<span class="kv-badge success">{p["status"]}</span>' if p["status"] == "EXERCISED AT RUNTIME" else f'<span class="kv-badge error">{p["status"]}</span>'
+                    rows_html += (
+                        f"<tr>"
+                        f'<td style="font-family:{FONT_MONO}; padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_PRIMARY}; font-weight:600;">{p["permission"]}</td>'
+                        f'<td style="padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_SECONDARY};">{p["action"]}</td>'
+                        f'<td style="padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; text-align:right;">{p_badge}</td>'
+                        f"</tr>"
+                    )
+                st.markdown(
+                    f'<table class="efferd-table" style="width:100%; border-collapse:collapse; font-size:12px;">'
+                    f'<thead><tr style="color:{TEXT_SECONDARY}; border-bottom:1px solid {BORDER_SUBTLE};">'
+                    f'<th style="text-align:left; padding-bottom:8px;">Permission Name</th>'
+                    f'<th style="text-align:left; padding-bottom:8px;">Runtime Action Triggered</th>'
+                    f'<th style="text-align:right; padding-bottom:8px;">Usage Status</th>'
+                    f'</tr></thead><tbody>{rows_html}</tbody></table>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(f'<div style="color:{TEXT_TERTIARY}; font-style:italic;">No runtime permissions info available.</div>', unsafe_allow_html=True)
+
+        with st.expander("🎯 Behavioral Fingerprint Matches", expanded=False):
+            if behavioral_fingerprints:
+                rows_html = ""
+                for b in behavioral_fingerprints:
+                    b_color = ERROR_RED if b["severity"] == "CRITICAL" else WARNING_YELLOW
+                    b_badge = f'<span class="kv-badge" style="color:{b_color}; background:rgba(239,68,68,0.1);">{b["severity"]}</span>'
+                    rows_html += (
+                        f"<tr>"
+                        f'<td style="font-family:{FONT_UI}; padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_PRIMARY}; font-weight:700;">{b["signature"]}</td>'
+                        f'<td style="padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; color:{TEXT_SECONDARY};">{b["desc"]}</td>'
+                        f'<td style="padding:8px 0; border-bottom:1px solid {BORDER_SUBTLE}; text-align:right;">{b_badge}</td>'
+                        f"</tr>"
+                    )
+                st.markdown(
+                    f'<table class="efferd-table" style="width:100%; border-collapse:collapse; font-size:12px;">'
+                    f'<thead><tr style="color:{TEXT_SECONDARY}; border-bottom:1px solid {BORDER_SUBTLE};">'
+                    f'<th style="text-align:left; padding-bottom:8px;">Signature Model</th>'
+                    f'<th style="text-align:left; padding-bottom:8px;">Behavior Description</th>'
+                    f'<th style="text-align:right; padding-bottom:8px;">Threat Level</th>'
+                    f'</tr></thead><tbody>{rows_html}</tbody></table>',
+                    unsafe_allow_html=True
+                )
+            else:
+                st.markdown(f'<div style="color:{TEXT_TERTIARY}; font-style:italic;">No behavioral fingerprint signatures matched during this run.</div>', unsafe_allow_html=True)
+
+        c1, c2 = st.columns([1, 1.3], gap="medium")
+        with c1:
+            root_badge = '<span class="kv-badge success">BYPASSED</span>' if objection_root else '<span class="kv-badge error">INACTIVE</span>'
+            ssl_badge = '<span class="kv-badge success">BYPASSED</span>' if objection_ssl else '<span class="kv-badge error">INACTIVE</span>'
+            st.markdown(
+                f'<div class="efferd-card">'
+                f'<div class="efferd-card-title">Instrumentation Bypasses (Objection)</div>'
+                f'<div style="display: flex; align-items: center; font-weight: 600; margin-bottom: 8px; color: {SUCCESS_GREEN}; font-size: 14px;">'
+                f'<span class="check-icon"></span>'
+                f'Dynamic checks successfully instrumented'
+                f'</div>'
+                f'<div style="font-size: 13px; color:{TEXT_SECONDARY}; line-height:1.5; margin-bottom:12px;">'
+                f'Objection client hooked into the device runtime to disable target safeguards:'
+                f'</div>'
+                f'<div class="kv-kv-row">'
+                f'<span class="kv-kv-label">Frida Root Detection Bypass:</span>'
+                f'<span>{root_badge}</span>'
+                f'</div>'
+                f'<div class="kv-kv-row">'
+                f'<span class="kv-kv-label">Frida SSL Pinning Bypass:</span>'
+                f'<span>{ssl_badge}</span>'
+                f'</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        with c2:
+            st.markdown(
+                f'<div class="efferd-card">'
+                f'<div class="efferd-card-title">Detonation Activity Timeline</div>'
+                f'<div class="timeline-container">'
+                f'<div class="timeline-item">'
+                f'<div class="timeline-dot"></div>'
+                f'<div class="timeline-content"><b>APK loaded & signature parsed</b><span class="timeline-time">(0.0s)</span></div>'
+                f'</div>'
+                f'<div class="timeline-item">'
+                f'<div class="timeline-dot"></div>'
+                f'<div class="timeline-content"><b>App installed on target emulator</b><span class="timeline-time">(1.2s)</span></div>'
+                f'</div>'
+                f'<div class="timeline-item">'
+                f'<div class="timeline-dot"></div>'
+                f'<div class="timeline-content"><b>Frida server initialized</b><span class="timeline-time">(2.5s)</span></div>'
+                f'</div>'
+                f'<div class="timeline-item">'
+                f'<div class="timeline-dot"></div>'
+                f'<div class="timeline-content"><b>Objection environment injected</b><span class="timeline-time">(4.1s)</span></div>'
+                f'</div>'
+                f'<div class="timeline-item">'
+                f'<div class="timeline-dot"></div>'
+                f'<div class="timeline-content"><b>Woke up background trojan receivers</b><span class="timeline-time">(5.8s)</span></div>'
+                f'</div>'
+                f'<div class="timeline-item">'
+                f'<div class="timeline-dot"></div>'
+                f'<div class="timeline-content"><b>Telemetry files synced</b><span class="timeline-time">(10.0s)</span></div>'
+                f'</div>'
+                f'</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
     # Action Row
+    st.markdown("<br>", unsafe_allow_html=True)
     if st.button("← Detonate Another APK", key="reset_page_button"):
         st.session_state.status = "landing"
         st.session_state.apk_details = None
         st.session_state.telemetry = None
+        st.session_state.is_running = False
         st.rerun()

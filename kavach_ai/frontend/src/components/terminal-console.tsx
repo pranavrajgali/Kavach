@@ -1,10 +1,30 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useDetonation } from '@/context/DetonationContext';
 import { Terminal } from 'lucide-react';
 
 export const TerminalConsole: React.FC = () => {
-  const { logs, apkDetails } = useDetonation();
+  const { logs, apkDetails, detonationDuration } = useDetonation();
+  const [timeLeft, setTimeLeft] = useState<number>(detonationDuration);
   const terminalEndRef = useRef<HTMLDivElement>(null);
+
+  // Sync initial duration on mount or selection change
+  useEffect(() => {
+    setTimeLeft(detonationDuration);
+  }, [detonationDuration]);
+
+  // Standard interval decrement hook
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Auto-scroll terminal logs to bottom on new additions
   useEffect(() => {
@@ -22,7 +42,7 @@ export const TerminalConsole: React.FC = () => {
     { label: 'Frida Server Spawn', time: '2.5s', active: checkEvent(['frida', 'hooks']) },
     { label: 'Objection Safeguards Bypass', time: '4.1s', active: checkEvent(['objection', 'root', 'ssl']) },
     { label: 'Receivers Detonation', time: '5.8s', active: checkEvent(['trojan', 'intents', 'boot_completed']) },
-    { label: 'Telemetry Logs Synced', time: '10.0s', active: checkEvent(['complete', 'syncing', 'telemetry']) },
+    { label: 'Telemetry Logs Synced', time: `${detonationDuration.toFixed(1)}s`, active: checkEvent(['complete', 'syncing', 'telemetry']) },
   ];
 
   return (
@@ -60,10 +80,18 @@ export const TerminalConsole: React.FC = () => {
           <div className="flex items-center gap-2 mt-0.5">
             <span className="w-2 h-2 rounded-full bg-cyan-500 animate-ping" />
             <span className="text-xs font-bold text-cyan-500 uppercase tracking-wide">
-              DETONATING
+              {timeLeft > 0 ? `DETONATING (${timeLeft}s)` : 'PROCESSING'}
             </span>
           </div>
         </div>
+      </div>
+
+      {/* Dynamic Progress Bar */}
+      <div className="w-full h-1 bg-[#121217] overflow-hidden relative border border-border/40">
+        <div 
+          className="absolute top-0 left-0 h-full bg-cyan-500 transition-all duration-1000 ease-linear shadow-[0_0_8px_rgba(6,182,212,0.5)]"
+          style={{ width: `${((detonationDuration - timeLeft) / detonationDuration) * 100}%` }}
+        />
       </div>
 
       {/* 2. Main 2-Column Progress Grid */}

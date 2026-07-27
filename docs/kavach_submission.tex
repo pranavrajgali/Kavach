@@ -158,7 +158,7 @@ The Indian mobile banking ecosystem faces an accelerating crisis. Financially mo
 
 \textbf{Kavach.ai} is a \textbf{fully automated, dual-track forensic pipeline} that eliminates this lag. It accepts an untrusted APK, subjects it to \textbf{simultaneous static code analysis and live behavioral sandbox observation}, fuses both intelligence streams through a schema-enforced reasoning engine, and produces a calibrated risk score, a MITRE ATT\&CK mapped threat report, and a pre-filled CERT-In compliance submission, all within a \textbf{sub-30-second processing target} (delivering preliminary triage and structured reports in under 30 seconds, with complete dynamic sandbox confirmation completing asynchronously).
 
-The pipeline's core innovation is its layered approach to automated security analysis: producing reliable, auditable conclusions without human oversight. Kavach.ai achieves this through three key pillars. First, a \textbf{cybersecurity-native transformer} (SecureBERT-2.0) trained on mathematically extracted behavioral chains, making it resilient to code obfuscation. Second, a \textbf{live behavioral observation layer} (local MobSF + Objection + eBPF dynamic sandbox) that executes the APK and collects user-land and kernel-land logs. Third, a \textbf{structured hallucination prevention framework} (Pydantic schema constraints) that forces the reasoning engine (LLaMA-3) to only report what the evidence proves, never what it imagines.
+The pipeline's core innovation is its layered approach to automated security analysis: producing reliable, auditable conclusions without human oversight. Kavach.ai achieves this through three key pillars. First, a \textbf{cybersecurity-native transformer} (SecureBERT-2.0) trained on mathematically extracted behavioral chains, making it resilient to code obfuscation. Second, a \textbf{live behavioral observation layer} (local ADB Detonator + Frida + eBPF dynamic sandbox) that executes the APK and collects user-land and kernel-land logs. Third, a \textbf{structured hallucination prevention framework} (Pydantic schema constraints) that forces the reasoning engine (LLaMA-3) to only report what the evidence proves, never what it imagines.
 
 The result is a system designed to produce forensic output that a SOC analyst, a compliance auditor, and a regulatory body can all \textbf{independently verify}.
 
@@ -273,7 +273,7 @@ These trojans share three architectural properties that define the requirements 
     \node (weights) [modelcard] at (10.8, 0.5) {\textbf{SecureBERT-2.0 Weights}\\LoRA Adapters\\(Offline Trained)};
 
     % Dynamic Track Node
-    \node (s2b) [card] at (2.8, -2.2) {\textbf{Stage 2B: Dynamic Track}\\MobSF + Objection + eBPF\\Local Emulation Sandbox};
+    \node (s2b) [card] at (2.8, -2.2) {\textbf{Stage 2B: Dynamic Track}\\ADB Detonator + Frida + eBPF\\Native Emulation Sandbox};
 
     % Merge and Output Nodes
     \node (s6) [card] at (6.8, -3.2) {\textbf{Stage 6: Telemetry Merge}\\Contradiction Resolution\\\& BCNF Serialization};
@@ -320,22 +320,55 @@ Kavach.ai eliminates native-code blindspots by auditing binary native libraries 
 
 Androguard then processes the bytecode to construct a Control Flow Graph (mapping execution paths) and a Data Flow Graph (tracking value transformations). Together, these graphs provide the formal mathematical representation of program execution that the backward slicing algorithm traverses.
 
-\subsubsection*{Stage 2B: Dynamic Track: Local "Holy Trinity" Sandbox (MobSF + Objection + eBPF)}
+\subsubsection*{Stage 2B: Dynamic Track: Native "Holy Trinity" Sandbox (ADB Detonator + Frida + eBPF)}
 
-Simultaneously, the APK is routed to our local dynamic analysis pipeline, combining \textbf{MobSF}, \textbf{Objection}, and \textbf{eBPF} to observe malware behavior at both user-land and kernel-land. This local stack completely eliminates the dependencies, privacy concerns, and latency of cloud-based APIs like Any.run.
+Simultaneously, the APK is routed to Kavach.ai's native dynamic analysis pipeline. By combining direct \textbf{ADB Device Orchestration}, \textbf{In-Memory Frida Bypass Hooks}, and \textbf{Kernel-Level eBPF Telemetry Tracing}, the system observes malware behavior at both user-land and kernel-land in under 20 seconds without third-party sandbox latency or privacy leaks.
 
-The execution is automated and orchestrated in under 20 seconds:
+Conceptually, the sandbox functions like an airport security checkpoint:
 \begin{itemize}
-  \item \textbf{Environment Setup (MobSF):} MobSF manages the local emulation workspace, boots the root-enabled ARM64 Android emulator, installs the target APK, and runs the local Frida server on the emulator.
-  \item \textbf{User-Land Breach (Objection):} To strip away surface-level defenses, the orchestrator executes an \texttt{objection} subprocess to hook the app process and bypass root checks and SSL pinning, forcing the malware to expose its decrypted network and payload traffic:
-  \begin{lstlisting}[language=bash]
-objection -g <package_name> explore -s "android root disable" -s "android sslpinning disable"
-  \end{lstlisting}
-  \item \textbf{Kernel-Land Stealth Observation (eBPF):} To counter anti-Frida and anti-analysis evasion tactics where modern banking trojans self-destruct upon detecting user-land instrumentation, the orchestrator uses ADB to push a pre-compiled eBPF tracing probe directly into the emulator's Linux kernel before app launch. The probe monitors raw system calls (syscalls), file descriptors, and socket connections completely invisible to the user-land process.
-  \item \textbf{Detonation \& Collection:} The orchestrator broadcasts system intents (such as \texttt{BOOT\_COMPLETED} or \texttt{BATTERY\_LOW}) via ADB to wake up dormant malware components. Objection dumps decrypted memory spaces while the eBPF probe captures stealthy kernel-level logs, merging both outputs into a unified JSON file for analysis.
+  \item \textbf{The Airport Interrogator (\texttt{detonate.py}):} Manages device connectivity via ADB, installs the target binary, spawns Frida sessions, and broadcasts system intents (\texttt{BOOT\_COMPLETED}, \texttt{BATTERY\_LOW}) to detonate sleeping banking trojans.
+  \item \textbf{The Undercover Spy (\texttt{frida\_bypass.js}):} Injected into JVM memory to spoof root checks (\texttt{/system/bin/su}, \texttt{ro.build.tags} to \texttt{release-keys}), bypass SSL pinning (\texttt{SSLContext.init}, \texttt{X509TrustManager}), and extract file I/O and network socket telemetry.
+  \item \textbf{The Invisible Kernel Camera (\texttt{ebpf\_trace.py}):} Operates beneath user-land at the Linux kernel layer, tracing system calls (\texttt{sys\_clone}, \texttt{sys\_execve}, \texttt{sys\_socket}, \texttt{sys\_connect}, \texttt{sys\_write}, \texttt{sys\_openat}) and providing high-fidelity fallback simulation telemetry when physical devices are offline.
 \end{itemize}
 
-To override delayed execution loops (such as \texttt{Thread.sleep}), the pipeline uses Frida script hooks to intercept dynamic runtime delay APIs (such as \texttt{SystemClock.sleep} or \texttt{Handler.postDelayed}) and fast-forwards the clock tickers. To resolve null pointer exceptions when injecting Frida hooks into native code, the interceptor hooks the \texttt{System.loadLibrary} or \texttt{dlopen} calls, delaying memory attachment until the library is fully resident in RAM.
+\begin{figure}[H]
+  \centering
+  \begin{mdframed}[backgroundcolor=black!2,linecolor=black!40,innerleftmargin=10pt,innerrightmargin=10pt,topline=true,bottomline=true]
+  \small
+  \begin{verbatim}
+[APK Upload]
+   │
+   ▼
+[detonate.py (ADB Detonator)] ──► Checks ADB Connection
+   │                             ├── [Device Attached] ──► Installs APK & Triggers Intents
+   │                             └── [No Device] ────────► Activates EBPFTracker Simulator
+   ├──► [frida_bypass.js] ─────► Bypasses Root & SSL Pinning; Logs File/Socket Access
+   └──► [ebpf_trace.py]   ─────► Traces sys_connect, sys_openat, sys_execve
+         │
+         ▼
+  [telemetry.json] ───────► [arq_worker.py] ───────► [merge_telemetry()]
+  (Structured Logs)         (Dynamic Result Mapping)  (Final Risk Score & Overrides)
+  \end{verbatim}
+  \end{mdframed}
+  \caption{Dynamic Analysis Data Routing Flow}
+  \label{fig:dynamic_flow}
+\end{figure}
+
+The extracted telemetry details are summarized below:
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Component Script} & \textbf{Target Domain} & \textbf{Extracted Telemetry \& Bypass Operations} \\ \hline
+\texttt{detonate.py} & ADB & Device serials, intent broadcasts (\texttt{BOOT\_COMPLETED}), installation metrics. \\ \hline
+\texttt{frida\_bypass.js} & User-Land JVM & Root check overrides (\texttt{su}, \texttt{busybox}), SSL pinning bypass, socket IPs. \\ \hline
+\texttt{ebpf\_trace.py} & Kernel-Land & Syscalls (\texttt{sys\_connect}, \texttt{sys\_openat}), shared prefs, \texttt{telemetry.json} serialization. \\ \hline
+\end{tabular}
+\caption{Dynamic Sandbox Component Telemetry Matrix}
+\label{tab:dynamic_matrix}
+\end{table}
 
 This local pipeline runs entirely within our secure, air-gapped system, ensuring sensitive financial samples never leave the organization.
 
@@ -447,7 +480,7 @@ The Streamlit dashboard implements client-side polling, sending light requests t
 This asynchronous orchestration balances SOC concurrency requirements and fits a strict operational timeline:
 \begin{itemize}
   \item \textbf{Synchronous Forensic Track (10--15 Seconds):} Runs the triage filter (~10\,ms), Smali extraction and backward slicing (~5.0\,s), SecureBERT-2.0 inference (~0.8\,s), SHAP token attribution (~1.5\,s), and LLaMA-3 report compilation via Groq API (~1.2\,s). This yields a complete, auditable report and preliminary risk score in under 15 seconds.
-  \item \textbf{Asynchronous Dynamic Track (15--20 Seconds):} Runs in parallel. The orchestrator calls the local MobSF service to boot the emulator, injects root-bypass and SSL-pinning hooks via Objection, and inserts the stealthy eBPF kernel probe. Telemetry is gathered for a 15-second observation window and returned immediately.
+  \item \textbf{Asynchronous Dynamic Track (15--20 Seconds):} Runs in parallel. The orchestrator triggers native ADB detonation, injects root-bypass and SSL-pinning hooks via Frida (\texttt{frida\_bypass.js}), and inserts the stealthy eBPF kernel probe. Telemetry is gathered for a 15-second observation window and returned immediately.
   \item \textbf{Dynamic Dashboard Update:} Once the dynamic track finishes, the Streamlit dashboard updates the score and merges the user-land memory dumps and kernel-space logs into the active case file without requiring any manual analyst refresh.
 \end{itemize}
 
@@ -518,7 +551,7 @@ Frontend \& Orchestration & \textbf{Streamlit} (SOC Analyst Dashboard), \textbf{
 \addlinespace
 Static Analysis & \textbf{APKTool} (bytecode extraction), \textbf{JADX} (decompilation fallback), and \textbf{Androguard} (Control Flow / Data Flow Graph construction). \\
 \addlinespace
-Dynamic Analysis & \textbf{MobSF, Objection, and eBPF} (local "Holy Trinity" dynamic sandbox orchestration for user-land bypasses and kernel-land telemetry collection). \\
+Dynamic Analysis & \textbf{ADB Detonator, Frida Hooks, and eBPF} (local "Holy Trinity" dynamic sandbox orchestration for user-land bypasses and kernel-land telemetry collection). \\
 \addlinespace
 Deep Learning Brain & \textbf{PyTorch} runtime executing \textbf{SecureBERT-2.0} (our specialized encoder-only Transformer based on ModernBERT fine-tuned on code slices). \\
 \addlinespace
@@ -544,7 +577,7 @@ kavach_ai/
 |-- .env                        # Environment parameters (Database credentials, API keys)
 |-- pyproject.toml              # Modern dependencies (uv / poetry)
 |-- infrastructure/             # DevOps & Local Sandbox Environment
-|   |-- docker-compose.yml      # WSL PostgreSQL, MobSF & Redis containers natively
+|   |-- docker-compose.yml      # WSL PostgreSQL & Redis containers natively
 |   |-- Dockerfile.api          # FastAPI API service builder
 |   `-- Dockerfile.streamlit    # Streamlit dashboard UI builder
 |-- frontend/                   # Streamlit SOC Dashboard (React 19 on standby)

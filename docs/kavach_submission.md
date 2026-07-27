@@ -18,7 +18,7 @@ The Indian mobile banking ecosystem faces an accelerating crisis. Mutated Androi
 
 The pipeline's core innovation is its layered approach to automated security analysis: producing reliable, auditable conclusions without human oversight. Kavach.ai achieves this through three key pillars:
 1. **Cybersecurity-Native Transformer:** Uses SecureBERT-2.0 trained on mathematically extracted behavioral chains, making it resilient to code obfuscation.
-2. **Live Behavioral Observation:** Integrates a local "Holy Trinity" dynamic sandbox (MobSF + Objection + eBPF) to execute and observe the binary in real time, bypassing anti-analysis triggers and capturing stealthy system calls.
+2. **Live Behavioral Observation:** Integrates a local "Holy Trinity" dynamic sandbox (ADB Detonator + Frida + eBPF) to execute and observe the binary in real time, bypassing anti-analysis triggers and capturing stealthy system calls.
 3. **Structured Hallucination Prevention:** Constrains the generative reasoning engine (LLaMA-3) using Pydantic schema validation to ensure reports contain only verified evidence.
 
 The result is a system designed to produce forensic output that a SOC analyst, a compliance auditor, and a regulatory body can all **independently verify**.
@@ -60,18 +60,15 @@ The static track reverse-engineers the APK binary using APKTool to extract Smali
 
 Androguard then processes the bytecode to construct a Control Flow Graph (mapping execution paths) and a Data Flow Graph (tracking value transformations). Together, these graphs provide the formal mathematical representation of program execution that the backward slicing algorithm traverses.
 
-#### Stage 2B: Dynamic Track: Local "Holy Trinity" Sandbox (MobSF + Objection + eBPF)
-Simultaneously, the APK is routed to our local dynamic analysis pipeline, combining **MobSF**, **Objection**, and **eBPF** to observe malware behavior at both user-land and kernel-land. This local stack completely eliminates the dependencies, privacy concerns, and latency of cloud-based APIs like Any.run.
+#### Stage 2B: Dynamic Track: Native "Holy Trinity" Sandbox (ADB Detonator + Frida + eBPF)
+Simultaneously, the APK is routed to our local dynamic analysis pipeline, combining **ADB Detonator (`detonate.py`)**, **Frida Script Hooks (`frida_bypass.js`)**, and **eBPF (`ebpf_trace.py`)** to observe malware behavior at both user-land and kernel-land. This local stack completely eliminates the dependencies, privacy concerns, and latency of cloud-based APIs like Any.run.
 
 The execution is automated and orchestrated in under 20 seconds:
 
-1. **Environment Setup (MobSF):** MobSF manages the local emulation workspace, boots the root-enabled ARM64 Android emulator, installs the target APK, and runs the local Frida server on the emulator.
-2. **User-Land Breach (Objection):** To strip away surface-level defenses, the orchestrator executes an `objection` subprocess to hook the app process and bypass root checks and SSL pinning, forcing the malware to expose its decrypted network and payload traffic:
-   ```bash
-   objection -g <package_name> explore -s "android root disable" -s "android sslpinning disable"
-   ```
+1. **Environment Setup (`detonate.py`):** ADB manages the local emulation workspace, boots the root-enabled ARM64 Android emulator, installs the target APK, and spawns the Frida session.
+2. **User-Land Bypass & In-Memory Hooks (`frida_bypass.js`):** Frida injects custom JavaScript hooks into JVM memory to spoof root checks (`/system/bin/su`, `ro.build.tags` to `release-keys`) and bypass SSL pinning (`SSLContext.init`, `X509TrustManager`), capturing file I/O and network socket telemetry.
 3. **Kernel-Land Stealth Observation (eBPF):** To counter anti-Frida and anti-analysis evasion tactics where modern banking trojans (like EventBot) self-destruct upon detecting user-land instrumentation, the orchestrator uses ADB to push a pre-compiled eBPF tracing probe (`bpftrace` or custom C probe) directly into the emulator's Linux kernel before app launch. The probe monitors raw system calls (syscalls), file descriptors, and socket connections completely invisible to the user-land process.
-4. **Detonation & Collection:** The orchestrator broadcasts system intents (such as `BOOT_COMPLETED` or `BATTERY_LOW`) via ADB to wake up dormant malware components. Objection dumps decrypted memory spaces while the eBPF probe captures stealthy kernel-level logs, merging both outputs into a unified JSON file for analysis.
+4. **Detonation & Collection:** The orchestrator broadcasts system intents (such as `BOOT_COMPLETED` or `BATTERY_LOW`) via ADB to wake up dormant malware components. Frida hooks capture file and socket activity while the eBPF probe captures stealthy kernel-level logs, merging both outputs into a unified JSON file for analysis.
 
 This local pipeline runs entirely within our secure, air-gapped system, ensuring sensitive financial samples never leave the organization.
 
@@ -137,7 +134,7 @@ Fuses numerical probabilities, static permission metadata carried forward from S
 To achieve a sub-30-second operational target under real-world SOC workloads, Kavach.ai separates its pipeline into synchronous static and parallel dynamic tracks:
 
 * **Synchronous Forensic Track (10–15 Seconds):** Runs manifest triage (~10 ms), Smali extraction and backward slicing (~5.0 s), SecureBERT-2.0 inference (~0.8 s on GPU / 2.5 s on CPU), SHAP token attribution (~1.5 s), and LLaMA-3 report generation via Groq API (~1.2 s). This yields a complete, auditable report and preliminary risk score in under 15 seconds.
-* **Asynchronous Dynamic Track (15–20 Seconds):** Runs in parallel. The orchestrator calls the local MobSF service to boot the emulator, injects root-bypass and SSL-pinning hooks via Objection, and inserts the stealthy eBPF kernel probe. Telemetry is gathered for a 15-second observation window and returned immediately.
+* **Asynchronous Dynamic Track (15–20 Seconds):** Runs in parallel. The orchestrator triggers native ADB detonation, injects root-bypass and SSL-pinning hooks via Frida (`frida_bypass.js`), and inserts the stealthy eBPF kernel probe. Telemetry is gathered for a 15-second observation window and returned immediately.
 * **Dynamic Dashboard Update:** Once the dynamic track finishes, the Streamlit dashboard updates the score and merges the user-land memory dumps and kernel-space logs into the active case file without requiring any manual analyst refresh.
 
 #### Stage 7: Operational Deployment: Streamlit SOC Dashboard
@@ -187,7 +184,7 @@ For **Kavach.ai (Problem Statement 1)**, the technology stack uses a lightweight
 | :--- | :--- |
 | **Frontend & Orchestration** | **Streamlit** (SOC Analyst Dashboard with React 19 standby) and **FastAPI** microservices, managed with the **SQLModel** ORM database layer (with thread-safe connection pooling) and backed by **Celery or ARQ + Redis** for persistent background worker queues. |
 | **Static Analysis** | **APKTool** (bytecode extraction), **JADX** (decompilation fallback), and **Androguard** (Control Flow / Data Flow Graph construction). |
-| **Dynamic Analysis** | **MobSF, Objection, and eBPF** (local "Holy Trinity" dynamic sandbox orchestration for user-land bypasses and kernel-land telemetry collection). |
+| **Dynamic Analysis** | **ADB Detonator, Frida Hooks, and eBPF** (local "Holy Trinity" dynamic sandbox orchestration for user-land bypasses and kernel-land telemetry collection). |
 | **Deep Learning Brain** | **PyTorch** runtime executing **SecureBERT-2.0** (our specialized encoder-only Transformer based on ModernBERT fine-tuned on code slices). |
 | **Explainable AI (XAI)** | **SHAP** (SHapley Additive exPlanations) for token-level marginal feature attribution and human-readable audit trails. |
 | **Report Generation** | **LLaMA-3** via **Groq API** (Language Processing Unit) for ultra-low latency CERT-In report synthesis. |

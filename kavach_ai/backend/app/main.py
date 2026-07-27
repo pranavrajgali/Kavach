@@ -126,7 +126,8 @@ async def get_recent_scan():
 @app.post("/api/detonate-stream")
 async def detonate_stream(
     file: UploadFile = File(...),
-    simulation: bool = Query(False)
+    simulation: bool = Query(False),
+    duration: int = Query(10)
 ):
     loop = asyncio.get_running_loop()
     queue = asyncio.Queue()
@@ -201,7 +202,7 @@ async def detonate_stream(
                         run_dynamic_analysis_pipeline,
                         apk_path=temp_path,
                         package_name=package_name,
-                        duration_seconds=10
+                        duration_seconds=duration
                     )
                 )
                 

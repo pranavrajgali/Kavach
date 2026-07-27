@@ -25,7 +25,7 @@ Bank/SOC analysts and CyberShield judges evaluating banking-malware triage tools
 Kavach.ai is split into two clearly separated lifecycles:
 
 - **Training Part (offline):** corpus compilation → backward program slicing (LAMD method) → SecureBERT-2.0 tokenization → LoRA fine-tuning → frozen weights + adapters saved to disk.
-- **Actual Part (runtime/live):** uploaded APK → manifest triage → static analysis (Androguard) → dynamic sandbox (MobSF + Objection + eBPF) → local SecureBERT-2.0 inference → SHAP attribution → telemetry fusion → LLaMA-3 (Groq) forensic report generation.
+- **Actual Part (runtime/live):** uploaded APK → manifest triage → static analysis (Androguard) → dynamic sandbox (ADB Detonator + Frida + eBPF) → local SecureBERT-2.0 inference → SHAP attribution → telemetry fusion → LLaMA-3 (Groq) forensic report generation.
 
 The two are connected by one artifact: the trained weights/adapters directory (`backend/pipeline/stage3_ml/weights/`), loaded once at startup by the runtime pipeline.
 
@@ -52,8 +52,8 @@ APK ──► Manifest Triage ──► SecureBERT Inference ──► SHAP Attr
               │                                              │
               ▼                                              ▼
      Local Dynamic Sandbox ─────────────────► Telemetry Fusion & Merge
-      (MobSF + Objection + eBPF)                             │
-                                                               ▼
+      (ADB Detonator + Frida + eBPF)                         │
+                                                             ▼
                                                     LLaMA-3 Groq Compiler
                                                   (Forensic PDF / CERT-In Form)
 ```
@@ -68,7 +68,7 @@ APK ──► Manifest Triage ──► SecureBERT Inference ──► SHAP Attr
 
 ### 2.2 FastAPI (Backend Orchestrator)
 - Owns job dispatching, async workers, and the `/upload` and `/jobs/{id}` endpoints.
-- Chosen specifically to avoid the "Monolithic Bottleneck" — the UI must never freeze while SecureBERT inference or the MobSF sandbox is running.
+- Chosen specifically to avoid the "Monolithic Bottleneck" — the UI must never freeze while SecureBERT inference or the dynamic sandbox is running.
 
 ### 2.3 PostgreSQL (Relational State + Storage)
 - Local, Docker-containerized instance — no Supabase/cloud dependency, since banking malware samples cannot leave the local environment.
@@ -78,10 +78,10 @@ APK ──► Manifest Triage ──► SecureBERT Inference ──► SHAP Attr
 - Base model pre-trained on 13.6B cybersecurity tokens.
 - LoRA adapters injected into attention layers (`W_q`, `W_v`) to keep trainable parameters under ~2.5%, making fine-tuning feasible on 8GB VRAM.
 
-### 2.5 Androguard, MobSF, Objection, eBPF (Static + Dynamic Analysis)
+### 2.5 Androguard, ADB Detonator, Frida, eBPF (Static + Dynamic Analysis)
 - **Androguard:** manifest parsing, CFG/DFG extraction, the 10ms triage filter.
-- **MobSF:** self-hosted dynamic sandbox / emulator orchestration (chosen over Any.run, whose free tier makes uploaded samples publicly visible — disqualifying for banking malware forensics).
-- **Objection:** disables root checks and SSL pinning at runtime so the sandbox can observe true behavior.
+- **ADB Detonator & Frida:** self-hosted native dynamic sandbox and in-memory instrumentation engine (chosen over Any.run, whose free tier makes uploaded samples publicly visible — disqualifying for banking malware forensics).
+- **Frida Script Hooks:** disables root checks and SSL pinning at runtime so the sandbox can observe true behavior.
 - **eBPF:** kernel-level, anti-Frida-invisible syscall/network logging (flagged as a roadmap feature, not required for MVP).
 
 ### 2.6 Groq Cloud + LLaMA-3 (Report Generation Engine)
@@ -91,7 +91,7 @@ APK ──► Manifest Triage ──► SecureBERT Inference ──► SHAP Attr
 ### 2.7 Supporting Libraries
 - SHAP (`PartitionSHAP`/`FastSHAP` for latency-bounded explainability)
 - Plotly (SHAP bar charts, risk gauges)
-- Docker Compose (Postgres, MobSF, Redis containers)
+- Docker Compose (Postgres, Redis containers)
 - Redis + Celery/ARQ (background task queue)
 
 ---
@@ -226,7 +226,7 @@ Androguard-based 10ms scan of `AndroidManifest.xml`. Flags dangerous permission 
 CFG/DFG traversal backward from dangerous sinks (SMS handlers, dynamic class loaders, accessibility binds) to isolate only the code contributing to malicious behavior. Falls back to raw Smali extraction if decompilation crashes. Also maps JNI bridges and scans `.so` native libraries for sensitive hooks.
 
 ### 5.3 Local Dynamic Sandbox (Stage 2B)
-MobSF orchestrates the emulator; Objection disables root/SSL-pinning checks; time dilution and intent broadcasts (`BOOT_COMPLETED`, `BATTERY_LOW`) force dormant malware to execute. eBPF kernel-level observation is a roadmap item.
+ADB orchestrates the emulator, dynamically detecting target CPU ABI and resolving the host environment's Frida executable path. Resolves installation mismatches by stripping incompatible native libraries and auto-resigning the APK. Frida hooks run with ThreadLocal re-entrancy and exception safeguards to disable root/SSL-pinning checks. Automates Device Admin registration (`dpm set-active-admin`) and warning overlay dismissal (Enter keyevents), using error-tolerant Monkey execution to prevent pipeline aborts. eBPF kernel-level observation is a roadmap item.
 
 ### 5.4 SecureBERT-2.0 Inference (Stage 4)
 Fully local PyTorch inference using the LoRA-adapted model, loaded from disk at startup — guarantees sub-second scoring and ensures zero-day samples never leave the local environment. Falls back to a rule-based similarity hasher if running on CPU without weights.
@@ -268,7 +268,7 @@ kavach_ai/
 ├── pyproject.toml
 │
 ├── infrastructure/
-│   ├── docker-compose.yml      # PostgreSQL, MobSF, Redis
+│   ├── docker-compose.yml      # PostgreSQL, Redis
 │   ├── Dockerfile.api
 │   └── Dockerfile.streamlit
 │
@@ -305,10 +305,10 @@ kavach_ai/
 
 ## 6. Free Tier Limits & Constraints
 
-- **Any.run:** free tier makes uploaded samples publicly visible — disqualifying for banking malware; replaced with self-hosted MobSF.
+- **Any.run:** free tier makes uploaded samples publicly visible — disqualifying for banking malware; replaced with self-hosted ADB/Frida sandbox.
 - **Groq Cloud:** rate limits apply on the free tier — the graceful-degradation fallback (safe markdown report) exists partly to handle failed/rate-limited LLaMA-3 calls, not just malformed output.
 - **8GB VRAM ceiling:** the reason LoRA (not full fine-tuning) is mandatory for SecureBERT-2.0.
-- **Local-only PostgreSQL/MobSF:** no cloud DB — avoids both cost and the data-residency problem of sending bank malware samples off-device.
+- **Local-only PostgreSQL/Sandbox:** no cloud DB — avoids both cost and the data-residency problem of sending bank malware samples off-device.
 
 ---
 
@@ -322,7 +322,7 @@ kavach_ai/
 ## 8. Phase-by-Phase Build Plan
 
 ### Phase 1: Project Setup
-Repo scaffold, Docker Compose (Postgres + MobSF + Redis), FastAPI skeleton, Streamlit skeleton.
+Repo scaffold, Docker Compose (Postgres + Redis), FastAPI skeleton, Streamlit skeleton.
 
 ### Phase 2: Manifest Triage
 Androguard integration, 10ms permission filter, obfuscation density scoring.
@@ -331,7 +331,7 @@ Androguard integration, 10ms permission filter, obfuscation density scoring.
 CFG/DFG extraction, LAMD backward slicing, JNI/.so scanning.
 
 ### Phase 4: Dynamic Sandbox
-MobSF + Objection wiring, intent broadcast triggers, (stub) eBPF hook.
+ADB + Frida wiring, intent broadcast triggers, (stub) eBPF hook.
 
 ### Phase 5: SecureBERT-2.0 + LoRA Inference
 Load fine-tuned weights/adapters, local PyTorch inference path, CPU fallback classifier.
@@ -356,7 +356,7 @@ Construct Streamlit view layout, hook client-side job status polling, implement 
 ## 9. Security Checklist
 
 ### Local Environment
-- [ ] Malware samples never transmitted to third-party sandboxes (MobSF self-hosted only)
+- [ ] Malware samples never transmitted to third-party sandboxes (Local sandbox only)
 - [ ] SecureBERT inference runs 100% locally — no code slices sent to external APIs
 - [ ] Docker network isolation between the sandbox emulator and host
 
