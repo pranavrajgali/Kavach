@@ -46,22 +46,18 @@ export const ReportView: React.FC = () => {
   // Dynamic verdict: never say "CLEAN"
   let dynamicVerdictText = 'No malicious behavior observed in this run';
   let dynamicVerdictColor = 'text-zinc-400';
-  let dynamicVerdictBg = 'border-zinc-500/20 bg-zinc-500/5';
 
   const hasDynamicEvidence = filesAccessed.length > 0 || networkConns.length > 0 || objectionRoot || objectionSsl;
 
   if (probability > 0.65) {
     dynamicVerdictText = 'MALICIOUS';
     dynamicVerdictColor = 'text-red-500';
-    dynamicVerdictBg = 'border-red-500/20 bg-red-500/5';
   } else if (probability > 0.30) {
     dynamicVerdictText = 'SUSPICIOUS';
     dynamicVerdictColor = 'text-amber-500';
-    dynamicVerdictBg = 'border-amber-500/20 bg-amber-500/5';
   } else if (hasDynamicEvidence) {
     dynamicVerdictText = 'LOW RISK';
     dynamicVerdictColor = 'text-blue-400';
-    dynamicVerdictBg = 'border-blue-500/20 bg-blue-500/5';
   }
 
   // Static verdict (simple heuristic from permissions / code)

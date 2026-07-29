@@ -1,5 +1,5 @@
 import React from 'react';
-import { Cpu, FileCode, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Cpu, FileCode, AlertTriangle } from 'lucide-react';
 
 export const BertClassifierView: React.FC = () => {
   return (

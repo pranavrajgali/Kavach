@@ -3,19 +3,8 @@
   "objection_root_bypass": false,
   "objection_ssl_pinning_bypass": false,
   "ebpf_telemetry": {
-    "syscalls": [
-      "sys_clone",
-      "sys_openat",
-      "sys_connect"
-    ],
-    "files_accessed": [
-      "/data/local/tmp/webview-command-line",
-      "/proc/meminfo",
-      "/data/user/0/com.skodin.spellmyamount/shared_prefs/WebViewChromiumPrefs.xml",
-      "/data/user/0/com.skodin.spellmyamount/shared_prefs/com.google.android.gms.analytics.prefs.xml",
-      "/data/app/com.skodin.spellmyamount-9JhqgxvDTAembUGpGCx2lg==/base.apk",
-      "/data/user/0/com.skodin.spellmyamount/cache/ads8693104766304231712.jar"
-    ],
+    "syscalls": [],
+    "files_accessed": [],
     "network_connections": []
   },
   "native_libraries": []

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CreditCard, Key, Eye, EyeOff, Save, Link as LinkIcon, Database } from 'lucide-react';
+import { CreditCard, Eye, EyeOff, Save, Link as LinkIcon, Database } from 'lucide-react';
 
 export const ApiCredentialsView: React.FC = () => {
   const [showGroqKey, setShowGroqKey] = useState(false);
