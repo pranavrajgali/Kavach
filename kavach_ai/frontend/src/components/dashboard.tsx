@@ -5,6 +5,12 @@ import { TerminalConsole } from '@/components/terminal-console';
 import { ReportView } from '@/components/report-view';
 import { KavachScorecard } from '@/components/kavach-scorecard';
 import { StaticView } from '@/components/static-view';
+import { BertClassifierView } from '@/components/views/bert-classifier-view';
+import { MitreMapView } from '@/components/views/mitre-map-view';
+import { CertInView } from '@/components/views/cert-in-view';
+import { SandboxHealthView } from '@/components/views/sandbox-health-view';
+import { SettingsView } from '@/components/views/settings-view';
+import { ApiCredentialsView } from '@/components/views/api-credentials-view';
 import { AlertCircle } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
@@ -16,6 +22,30 @@ export const Dashboard: React.FC = () => {
 
   if (currentView === 'static_scan') {
     return <StaticView />;
+  }
+
+  if (currentView === 'bert_classifier') {
+    return <BertClassifierView />;
+  }
+
+  if (currentView === 'mitre_map') {
+    return <MitreMapView />;
+  }
+
+  if (currentView === 'cert_in') {
+    return <CertInView />;
+  }
+
+  if (currentView === 'sandbox_health') {
+    return <SandboxHealthView />;
+  }
+
+  if (currentView === 'settings') {
+    return <SettingsView />;
+  }
+
+  if (currentView === 'api_credentials') {
+    return <ApiCredentialsView />;
   }
 
   switch (status) {

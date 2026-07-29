@@ -37,7 +37,7 @@ export interface TelemetryPayload {
 
 interface DetonationContextType {
   status: 'landing' | 'analyzing' | 'completed' | 'error';
-  currentView: 'dashboard' | 'scorecard' | 'static_scan';
+  currentView: 'dashboard' | 'scorecard' | 'static_scan' | 'bert_classifier' | 'mitre_map' | 'cert_in' | 'sandbox_health' | 'api_credentials' | 'settings';
   apkDetails: ApkDetails | null;
   logs: string[];
   telemetry: TelemetryPayload | null;
@@ -46,7 +46,7 @@ interface DetonationContextType {
   setSimulationMode: (mode: boolean) => void;
   detonationDuration: number;
   setDetonationDuration: (duration: number) => void;
-  setCurrentView: (view: 'dashboard' | 'scorecard' | 'static_scan') => void;
+  setCurrentView: (view: 'dashboard' | 'scorecard' | 'static_scan' | 'bert_classifier' | 'mitre_map' | 'cert_in' | 'sandbox_health' | 'api_credentials' | 'settings') => void;
   viewScorecard: () => void;
   viewDashboard: () => void;
   loadRecentScan: () => Promise<void>;
@@ -58,7 +58,7 @@ const DetonationContext = createContext<DetonationContextType | undefined>(undef
 
 export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [status, setStatus] = useState<DetonationContextType['status']>('landing');
-  const [currentView, setCurrentView] = useState<'dashboard' | 'scorecard' | 'static_scan'>('dashboard');
+  const [currentView, setCurrentView] = useState<DetonationContextType['currentView']>('dashboard');
   const [apkDetails, setApkDetails] = useState<ApkDetails | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [telemetry, setTelemetry] = useState<TelemetryPayload | null>(null);

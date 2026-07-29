@@ -57,14 +57,28 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                 <FileCode className="w-3.5 h-3.5" />
                 Static & JNI Scan
               </button>
-              <div className="flex items-center gap-3 px-3 py-1.5 text-xs font-medium text-muted-foreground cursor-not-allowed text-left">
+              <button 
+                onClick={() => setCurrentView('bert_classifier')}
+                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
+                  currentView === 'bert_classifier'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                }`}
+              >
                 <Cpu className="w-3.5 h-3.5" />
                 BERT ML Classifier
-              </div>
-              <div className="flex items-center gap-3 px-3 py-1.5 text-xs font-medium text-muted-foreground cursor-not-allowed text-left">
+              </button>
+              <button 
+                onClick={() => setCurrentView('mitre_map')}
+                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
+                  currentView === 'mitre_map'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                }`}
+              >
                 <ShieldAlert className="w-3.5 h-3.5" />
                 MITRE ATT&CK Map
-              </div>
+              </button>
             </nav>
 
             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-3 block mt-5 mb-2">
@@ -87,28 +101,56 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   NEW
                 </span>
               </button>
-              <div className="flex items-center gap-3 px-3 py-1.5 text-xs font-medium text-muted-foreground cursor-not-allowed text-left">
+              <button 
+                onClick={() => setCurrentView('cert_in')}
+                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
+                  currentView === 'cert_in'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                }`}
+              >
                 <FileText className="w-3.5 h-3.5" />
                 CERT-In Templates
-              </div>
-              <div className="flex items-center gap-3 px-3 py-1.5 text-xs font-medium text-muted-foreground cursor-not-allowed text-left">
+              </button>
+              <button 
+                onClick={() => setCurrentView('sandbox_health')}
+                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
+                  currentView === 'sandbox_health'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                }`}
+              >
                 <Activity className="w-3.5 h-3.5" />
                 Sandbox System Health
-              </div>
+              </button>
             </nav>
 
             <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-3 block mt-5 mb-2">
               Administration
             </span>
             <nav className="space-y-0.5">
-              <div className="flex items-center gap-3 px-3 py-1.5 text-xs font-medium text-muted-foreground cursor-not-allowed text-left">
+              <button 
+                onClick={() => setCurrentView('settings')}
+                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
+                  currentView === 'settings'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                }`}
+              >
                 <Settings className="w-3.5 h-3.5" />
                 Settings
-              </div>
-              <div className="flex items-center gap-3 px-3 py-1.5 text-xs font-medium text-muted-foreground cursor-not-allowed text-left">
+              </button>
+              <button 
+                onClick={() => setCurrentView('api_credentials')}
+                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
+                  currentView === 'api_credentials'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                }`}
+              >
                 <CreditCard className="w-3.5 h-3.5" />
                 API Credentials
-              </div>
+              </button>
             </nav>
           </div>
         </div>

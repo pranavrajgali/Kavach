@@ -1,11 +1,48 @@
 {
   "execution_mode": "LIVE_ADB_FRIDA",
   "objection_root_bypass": false,
-  "objection_ssl_pinning_bypass": false,
+  "objection_ssl_pinning_bypass": true,
   "ebpf_telemetry": {
-    "syscalls": [],
-    "files_accessed": [],
-    "network_connections": []
+    "syscalls": [
+      "sys_clone",
+      "sys_openat",
+      "sys_connect"
+    ],
+    "files_accessed": [
+      "/data/user/0/com.triposo.droidguide.trinidad_and_tobago/shared_prefs/com.facebook.sdk.attributionTracking.xml",
+      "/system/etc/security/cacerts/c90bc37d.0",
+      "/data/user/0/com.triposo.droidguide.trinidad_and_tobago/files/stack.trace",
+      "/data/user/0/com.triposo.droidguide.trinidad_and_tobago/files/AppEventsLogger.persistedevents",
+      "/data/user/0/com.triposo.droidguide.trinidad_and_tobago/files/AppEventsLogger.persistedsessioninfo",
+      "/data/user/0/com.triposo.droidguide.trinidad_and_tobago/shared_prefs/btnprefs.xml",
+      "/data/user/0/com.triposo.droidguide.trinidad_and_tobago/shared_prefs/com.facebook.internal.preferences.APP_SETTINGS.xml",
+      "/data/user/0/com.triposo.droidguide.trinidad_and_tobago/shared_prefs/device_id.xml",
+      "/data/user/0/com.triposo.droidguide.trinidad_and_tobago/shared_prefs/com.facebook.sdk.appEventPreferences.xml",
+      "/system/etc/security/cacerts/fd08c599.0",
+      "/storage/emulated/0/Android/data/com.triposo.droidguide.trinidad_and_tobago/files/Skobbler2/SKMaps.zip",
+      "/data/user/0/com.triposo.droidguide.trinidad_and_tobago/shared_prefs/com.android.vending.licensing.APKExpansionPolicy.xml",
+      "/data/user/0/com.triposo.droidguide.trinidad_and_tobago/shared_prefs/synchronize_service.xml",
+      "/data/user/0/com.triposo.droidguide.trinidad_and_tobago/files/AF_INSTALLATION",
+      "/data/user/0/com.triposo.droidguide.trinidad_and_tobago/shared_prefs/app.xml",
+      "/data/user/0/com.triposo.droidguide.trinidad_and_tobago/shared_prefs/appsflyer-data.xml"
+    ],
+    "network_connections": [
+      {
+        "ip": "graph.facebook.com",
+        "port": 443,
+        "protocol": "TCP"
+      },
+      {
+        "ip": "t.appsflyer.com",
+        "port": 443,
+        "protocol": "TCP"
+      },
+      {
+        "ip": "api.usebutton.com",
+        "port": 443,
+        "protocol": "TCP"
+      }
+    ]
   },
   "native_libraries": []
 }
