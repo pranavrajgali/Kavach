@@ -1,4 +1,5 @@
 services:
+  # 1. Database Layer
   postgres:
     image: postgres:15-alpine
     container_name: kavach_postgres
@@ -14,23 +15,44 @@ services:
     networks:
       - kavach_network
 
-  redis:
-    image: redis:7-alpine
-    container_name: kavach_redis
+  # 2. FastAPI Orchestrator Backend
+  api:
+    build:
+      context: ../
+      dockerfile: infrastructure/Dockerfile.api
+    container_name: kavach_api
     restart: always
     ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://kavach_user:kavach_password@postgres:5432/kavach_db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - postgres
+    networks:
+      - kavach_network
+
+  # 3. React UI Dashboard
+  frontend:
+    build:
+      context: ../
+      dockerfile: infrastructure/Dockerfile.frontend
+    container_name: kavach_frontend
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
     networks:
       - kavach_network
 
 volumes:
   postgres_data:
     driver: local
-  redis_data:
-    driver: local
 
 networks:
   kavach_network:
     driver: bridge
+
+
