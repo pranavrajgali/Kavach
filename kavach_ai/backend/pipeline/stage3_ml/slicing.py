@@ -1414,8 +1414,24 @@ def slice_methods(
     """Find sinks and build one deterministic structured slice per sink."""
 
     method_tuple = tuple(methods)
-    configured_limits = limits or SliceLimits()
     sinks = find_sinks(method_tuple, sink_rules)
+    return slice_sinks(method_tuple, sinks, limits=limits)
+
+
+def slice_sinks(
+    methods: Iterable[ExtractedMethod],
+    sinks: Iterable[SinkMatch],
+    *,
+    limits: SliceLimits | None = None,
+    max_total_instructions: int | None = None,
+) -> SlicingResult:
+    """Build an ordered sink set, stopping before an APK instruction budget is exceeded."""
+
+    if max_total_instructions is not None and max_total_instructions <= 0:
+        raise ValueError("max_total_instructions must be greater than zero")
+    method_tuple = tuple(methods)
+    sink_tuple = tuple(sinks)
+    configured_limits = limits or SliceLimits()
     unknown_counts: Counter[str] = Counter()
     for method in sorted(
         (item for item in method_tuple if item.is_usable), key=_identity
@@ -1425,7 +1441,18 @@ def slice_methods(
             if instruction_use_def(instruction, previous).unknown_opcode:
                 unknown_counts[instruction.opcode] += 1
     builder = _SliceBuilder(method_tuple, configured_limits, unknown_counts)
-    slices = tuple(builder.build(sink) for sink in sinks)
+    built_sinks: list[SinkMatch] = []
+    built_slices: list[ProgramSlice] = []
+    retained_count = 0
+    for sink in sink_tuple:
+        program_slice = builder.build(sink)
+        next_count = retained_count + len(program_slice.retained_instructions)
+        if max_total_instructions is not None and next_count > max_total_instructions:
+            break
+        built_sinks.append(sink)
+        built_slices.append(program_slice)
+        retained_count = next_count
+    slices = tuple(built_slices)
     issues: list[SliceIssue] = []
     for program_slice in slices:
         issues.extend(program_slice.issues)
@@ -1441,13 +1468,13 @@ def slice_methods(
         )
     unique_issues = tuple(sorted(set(issues), key=_issue_key))
     return SlicingResult(
-        sinks,
+        tuple(built_sinks),
         slices,
         unique_issues,
         SlicingMetrics(
             methods_indexed=len(method_tuple),
             usable_methods_scanned=sum(method.is_usable for method in method_tuple),
-            sinks_found=len(sinks),
+            sinks_found=len(sink_tuple),
             slices_created=len(slices),
             traversal_states=builder.total_states,
             unknown_opcodes=tuple(sorted(unknown_counts.items())),
@@ -1494,5 +1521,6 @@ __all__ = [
     "instruction_use_def",
     "map_callee_parameter_dependencies",
     "slice_extraction_result",
+    "slice_sinks",
     "slice_methods",
 ]

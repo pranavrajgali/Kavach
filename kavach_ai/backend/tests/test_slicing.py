@@ -32,6 +32,7 @@ from kavach_ai.backend.pipeline.stage3_ml.slicing import (
     map_callee_parameter_dependencies,
     slice_extraction_result,
     slice_methods,
+    slice_sinks,
 )
 
 
@@ -1190,3 +1191,21 @@ def test_zero_configured_sinks_is_valid() -> None:
     assert sliced.sinks == ()
     assert sliced.slices == ()
     assert sliced.metrics.sinks_found == sliced.metrics.slices_created == 0
+
+
+def test_apk_instruction_budget_omits_whole_next_slice_and_stops() -> None:
+    first = sink_method(
+        signature="Lapp/A;->run()V",
+        prefix=(ins(0, "const-string", "v0", '"one"'),),
+    )
+    second = sink_method(
+        signature="Lapp/B;->run()V",
+        prefix=(ins(0, "const-string", "v0", '"two"'),),
+    )
+    methods = (first, second)
+    sinks = find_sinks(methods)
+    one_length = len(slice_sinks(methods, sinks[:1]).slices[0].retained_instructions)
+    bounded = slice_sinks(methods, sinks, max_total_instructions=one_length)
+    assert len(bounded.slices) == len(bounded.sinks) == 1
+    assert bounded.sinks[0] == sinks[0]
+    assert sum(len(item.retained_instructions) for item in bounded.slices) == one_length

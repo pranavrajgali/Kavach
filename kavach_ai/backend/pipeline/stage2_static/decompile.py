@@ -962,6 +962,7 @@ def extract_apk(
     *,
     apktool_timeout: float = 120.0,
     jadx_timeout: float = 180.0,
+    run_jadx_analysis: bool = True,
 ) -> ExtractionResult:
     """Extract APKTool Smali into backend-neutral method objects."""
 
@@ -1025,12 +1026,13 @@ def extract_apk(
             methods = list(_merge_extracted_methods(methods, raw_extraction.methods))
             issues.extend(raw_extraction.issues)
 
-        jadx_execution = run_jadx(
-            validated.apk_path,
-            workspace.jadx_path,
-            timeout=jadx_timeout,
-        )
-        issues.extend(_jadx_execution_issues(jadx_execution))
+        if run_jadx_analysis:
+            jadx_execution = run_jadx(
+                validated.apk_path,
+                workspace.jadx_path,
+                timeout=jadx_timeout,
+            )
+            issues.extend(_jadx_execution_issues(jadx_execution))
 
     methods = list(sorted(methods, key=_method_sort_key))
     usable_methods = tuple(method for method in methods if method.is_usable)

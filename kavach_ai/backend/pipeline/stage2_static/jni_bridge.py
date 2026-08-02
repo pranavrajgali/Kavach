@@ -1179,6 +1179,105 @@ def analyze_jni_bridges(
     )
 
 
+def recompute_cached_jni_bridges(
+    methods: Iterable[ExtractedMethod],
+    load_evidence: Iterable[LibraryLoadEvidence],
+    library_analyses: Iterable[NativeLibraryAnalysis],
+) -> JniBridgeResult:
+    """Recompute JNI mappings entirely from serialized static evidence.
+
+    This path uses method IR, Java load evidence, exported symbols, and cached
+    native signal evidence. It never opens or executes a native library.
+    """
+
+    method_tuple = tuple(methods)
+    native_pairs = _discover_native_methods(method_tuple)
+    native_identities = tuple(identity for identity, _ in native_pairs)
+    loads = tuple(sorted(set(load_evidence)))
+    analyses = tuple(sorted(library_analyses, key=lambda item: _library_key(item.library)))
+    symbols = tuple(
+        sorted(symbol for analysis in analyses for symbol in analysis.exported_symbols)
+    )
+    mappings, mapping_issues = _build_mappings(native_pairs, symbols)
+    issues = [issue for analysis in analyses for issue in analysis.issues]
+    issues.extend(mapping_issues)
+    for item in loads:
+        if item.dynamic_name:
+            issues.append(
+                NativeIssue(
+                    "DYNAMIC_LIBRARY_LOAD_NAME",
+                    "System library load name could not be resolved locally.",
+                    NativeIssueSeverity.WARNING,
+                    method=item.method,
+                )
+            )
+        elif not item.resolved_library_archive_paths:
+            issues.append(
+                NativeIssue(
+                    "LOADED_LIBRARY_NOT_IN_APK",
+                    f"Requested library {item.requested_name!r} does not match cached native inventory.",
+                    NativeIssueSeverity.WARNING,
+                    method=item.method,
+                )
+            )
+    dynamic_registration = any(
+        signal.signature in {"RegisterNatives", "JNI_OnLoad"}
+        for analysis in analyses
+        for signal in analysis.sensitive_signals
+    )
+    if dynamic_registration and any(
+        mapping.mapping_kind is JniMappingKind.UNRESOLVED for mapping in mappings
+    ):
+        issues.append(
+            NativeIssue(
+                "DYNAMIC_JNI_REGISTRATION_POSSIBLE",
+                "Unresolved native declarations coexist with cached dynamic-registration evidence.",
+                NativeIssueSeverity.WARNING,
+            )
+        )
+    exact_count = sum(
+        mapping.mapping_kind in {JniMappingKind.EXACT_LONG_NAME, JniMappingKind.EXACT_SHORT_NAME}
+        for mapping in mappings
+    )
+    ambiguous_count = sum(
+        mapping.mapping_kind is JniMappingKind.AMBIGUOUS_OVERLOAD for mapping in mappings
+    )
+    unresolved_count = sum(
+        mapping.mapping_kind is JniMappingKind.UNRESOLVED for mapping in mappings
+    )
+    signal_count = sum(len(analysis.sensitive_signals) for analysis in analyses)
+    useful = bool(native_identities or loads or symbols or signal_count)
+    complete = bool(analyses) and all(
+        analysis.backend is not NativeToolBackend.NONE
+        and not any(issue.severity is NativeIssueSeverity.ERROR for issue in analysis.issues)
+        for analysis in analyses
+    )
+    status = (
+        NativeAnalysisStatus.SUCCESS
+        if complete
+        else NativeAnalysisStatus.PARTIAL
+        if useful
+        else NativeAnalysisStatus.NOT_APPLICABLE
+    )
+    return JniBridgeResult(
+        status,
+        native_identities,
+        loads,
+        analyses,
+        mappings,
+        JniBridgeMetrics(
+            len(native_identities),
+            len(analyses),
+            len(symbols),
+            exact_count,
+            ambiguous_count,
+            unresolved_count,
+            signal_count,
+        ),
+        tuple(sorted(set(issues), key=_issue_key)),
+    )
+
+
 __all__ = [
     "ExportedSymbol",
     "JniBridgeMetrics",
@@ -1200,5 +1299,6 @@ __all__ = [
     "encode_jni_short_name",
     "extract_exported_symbols",
     "find_library_load_evidence",
+    "recompute_cached_jni_bridges",
     "scan_native_signals",
 ]

@@ -1865,6 +1865,26 @@ def test_extract_apk_success_with_complete_smali(
     assert result.errors == ()
 
 
+def test_extract_apk_can_skip_jadx_for_offline_dataset_build(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    apk = _write_apk(tmp_path / "sample.apk")
+    _mock_apktool_with_smali(monkeypatch, {"smali/x/Test.smali": SIMPLE_SMALI})
+
+    def unexpected_jadx(*args, **kwargs):
+        raise AssertionError("JADX must remain inspection-only in this mode")
+
+    monkeypatch.setattr(decompile, "run_jadx", unexpected_jadx)
+    result = extract_apk(
+        apk,
+        tmp_path / "artifacts" / "decompile",
+        run_jadx_analysis=False,
+    )
+    assert result.status is ExtractionStatus.SUCCESS
+    assert result.jadx_execution is None
+
+
 def test_extract_apk_partial_for_incomplete_multidex(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
