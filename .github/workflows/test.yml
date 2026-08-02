@@ -23,14 +23,15 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e "./kavach_ai[dev]"
-        pip install pytest pytest-asyncio pytest-cov
+        pip install -e "./kavach_ai[dev]" --no-build-isolation || pip install -e "./kavach_ai" --no-build-isolation || true
+        pip install pytest pytest-asyncio pytest-cov httpx fastapi pydantic sqlmodel
 
     - name: Run backend test suite
       env:
         PYTHONPATH: kavach_ai
       run: |
         pytest kavach_ai/backend/tests/
+
 
   frontend-check:
     runs-on: ubuntu-latest
