@@ -8,10 +8,17 @@ This repository is organized to separate the offline training pipeline from the 
 
 The workspace is organized as follows:
 
-* docs: Project documentation, technical specifications, and team plans.
-* docs/plans: Chronological roadmap and individual developer tracks.
-* kavach_ai: Main application code (Streamlit frontend, FastAPI orchestrator, database layers, workers, and pipelines).
-
+```text
+Kavach/
+├── data/                    # Raw APK files and datasets (ignored by Git)
+├── docs/                    # Project documentation, technical specifications, and team plans
+│   └── plans/               # Chronological roadmap and individual developer tracks
+├── kavach_ai/               # Main application package
+│   ├── backend/             # FastAPI orchestrator, database models, workers, and pipelines
+│   ├── frontend/            # React (Vite) Dashboard UI
+│   └── infrastructure/      # Deployment configurations
+└── training/                # Offline ML model training pipeline and dataset building scripts
+```
 ## Key Documentation
 
 Please refer to these documents before starting development:
@@ -87,7 +94,7 @@ This script executes the Stage 4 pipeline (either using a connected emulator/dev
 
 ## Running the Dynamic Analysis with the UI
 
-Kavach.ai supports two user interfaces for dynamic analysis and detonation monitoring: the modern **React (Vite) Dashboard** (recommended) and the **Streamlit Dashboard**.
+Kavach.ai uses a modern **React (Vite) Dashboard** for dynamic analysis and detonation monitoring.
 
 ### 1. Starting the FastAPI Backend Server
 Before running either UI, start the FastAPI orchestrator backend using the project virtual environment:
@@ -127,12 +134,4 @@ npm install
 npm run dev
 ```
 Open `http://localhost:5173` in your browser. Drag and drop your `.apk` file into the upload zone to initiate the live dynamic sandbox detonation stream.
-
-### 3. Launching the Streamlit UI Dashboard
-Alternatively, you can run the Streamlit-based sandbox dashboard:
-```bash
-# From the project root with the virtual environment activated
-streamlit run kavach_ai/frontend_streamlit/app.py
-```
-Open the printed local URL (typically `http://localhost:8501`) to interact with the Streamlit version of the dashboard.
 

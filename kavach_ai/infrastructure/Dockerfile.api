@@ -10,7 +10,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy configuration and package folders
 COPY pyproject.toml /app/
 COPY backend /app/backend/
-COPY frontend /app/frontend/
 
 # Install python package dependencies
 RUN pip install --no-cache-dir .
