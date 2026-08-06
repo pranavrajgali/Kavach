@@ -55,3 +55,7 @@ data/*
 training/data/*
 training/data.zip
 training/mess.ipynbtraining/outputs/
+.vscode/
+training/mess.ipynb
+training/models/
+training/outputs/
