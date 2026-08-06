@@ -50,9 +50,12 @@ stage3_ml/weights/
 
 # Data folder for training (ignore all files except .gitkeep)
 data/*
-!data/.gitkeep
-training/data/
 
 # Rebuildable/canonical local ML preprocessing artifacts
 training/data/*
-!training/data/.gitkeep
+training/data.zip
+training/mess.ipynbtraining/outputs/
+.vscode/
+training/mess.ipynb
+training/models/
+training/outputs/

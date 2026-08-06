@@ -1,0 +1,49 @@
+schema_version: training-config-v2
+run: {mode: tiny_overfit, name: securebert-tiny-overfit, seed: 42, output_dir: training/outputs/securebert-tiny-overfit, overwrite_output_dir: false, resume_from_checkpoint: null}
+data:
+  root: training/data
+  train_split: train
+  eval_split: validation
+  tokenizer_fingerprint: null
+  sampler: {type: standard, active_apk_shards: 8}
+  exclude_internally_truncated: true
+  min_token_length: 16
+  max_token_length: 768
+  include_sink_categories: null
+  exclude_sink_categories: []
+  excluded_example_ids: []
+  max_context_length: 1024
+  context_policy: head
+  tiny_examples: 24
+  tiny_candidate_pool: 512
+  tiny_disallowed_boundaries: [call_depth_limit, method_limit, candidate_limit, instruction_limit, traversal_state_limit, recursion]
+  smoke_examples: 48
+model: {checkpoint: training/models/SecureBERT2.0-base, tokenizer: training/models/SecureBERT2.0-base}
+lora: {enabled: true, task_type: SEQ_CLS, target_modules: [Wqkv], modules_to_save: [head, classifier], rank: 8, alpha: 16, dropout: 0.05, bias: none}
+hardware: {device: auto, precision: fp32, gradient_checkpointing: false, torch_compile: false}
+trainer:
+  per_device_train_batch_size: 8
+  per_device_eval_batch_size: 8
+  gradient_accumulation_steps: 1
+  learning_rate: 0.0002
+  weight_decay: 0.01
+  warmup_ratio: 0.0
+  num_train_epochs: 30.0
+  max_steps: -1
+  logging_steps: 1
+  eval_strategy: "no"
+  eval_steps: null
+  save_strategy: epoch
+  save_steps: null
+  save_total_limit: 2
+  max_grad_norm: 1.0
+  load_best_model_at_end: false
+  metric_for_best_model: f1
+  greater_is_better: true
+  dataloader_num_workers: 0
+  dataloader_persistent_workers: false
+  disable_tqdm: false
+  seed: 42
+  data_seed: 42
+  pad_to_multiple_of: 8
+wandb: {mode: disabled, project: kavach-securebert, entity: null, group: null, job_type: memorization, tags: [tiny-overfit], notes: Same-set memorization diagnostic, log_model: false, watch_model: false}
