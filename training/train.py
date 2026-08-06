@@ -1,301 +1,215 @@
-import os
-import sys
+"""Permanent YAML-driven SecureBERT training entry point."""
+
+from __future__ import annotations
+
+import hashlib
 import json
-import argparse
+import sys
+from collections import Counter
 from pathlib import Path
+from typing import Any, Sequence
+
 import torch
-from torch.utils.data import Dataset, DataLoader
-from torch.optim import AdamW
-from transformers import (
-    AutoModelForSequenceClassification,
-    AutoTokenizer,
-    get_linear_schedule_with_warmup
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from training.pipeline.config import ResolvedConfig, load_config, parse_args  # noqa: E402
+from training.pipeline.data import (  # noqa: E402
+    Corpus, PreflightResult, ScanSummary, TinyDataset, TokenShardIterableDataset,
+    apply_context_policy, create_collator, load_corpus, load_local_tokenizer,
+    load_validated_shard, preflight_split, prepare_record, scan_split,
+    select_smoke_records, select_tiny_records, validate_tokenizer,
 )
-from peft import LoraConfig, get_peft_model, TaskType
-
-# Model & Default Paths
-DEFAULT_MODEL_NAME = "cisco-ai/SecureBERT2.0-base"
-FALLBACK_MODEL_NAME = "Ehije/SecureBERT"
-DEFAULT_TRAIN_DATA = "data/processed_slices.jsonl"
-DEFAULT_OUTPUT_DIR = "kavach_ai/backend/pipeline/stage3_ml/weights"
-
-
-class SmaliSliceDataset(Dataset):
-    """Custom Dataset for loading Smali opcode slices and labels."""
-    def __init__(self, data_path: str, tokenizer, max_length: int = 512):
-        self.examples = []
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-
-        # Auto-resolve candidate data paths if specified path does not exist
-        candidate_paths = [
-            Path(data_path),
-            Path("data/processed_slices.jsonl"),
-            Path("training/data/dataset-v1/train.jsonl"),
-            Path("data/train.jsonl"),
-        ]
-
-        resolved_path = None
-        for candidate in candidate_paths:
-            if candidate.exists() and candidate.is_file() and candidate.stat().st_size > 0:
-                resolved_path = candidate
-                break
-
-        if resolved_path:
-            print(f"[DATA] Loading dataset from: '{resolved_path.resolve()}'")
-            with open(resolved_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    if not line.strip():
-                        continue
-                    item = json.loads(line)
-                    text = item.get("slice_text", item.get("code", item.get("text", item.get("slice", ""))))
-                    label = item.get("label", item.get("is_malware", item.get("malicious", 0)))
-                    if text:
-                        self.examples.append((text, int(label)))
-            print(f"[OK] Loaded {len(self.examples)} samples from dataset.")
-        else:
-            print(f"[WARN] Dataset file not found at '{data_path}'. Using dummy dataset for initial pipeline verification.")
-            self.examples = [
-                ("const-string v0, 'Lcom/malware/bot;->sendSms'", 1),
-                ("invoke-virtual {v0}, Landroid/telephony/SmsManager;->sendTextMessage", 1),
-                ("Ljava/lang/StringBuilder;->append", 0),
-                ("Landroid/widget/TextView;->setText", 0),
-            ] * 25
-
-    def __len__(self):
-        return len(self.examples)
-
-    def __getitem__(self, idx):
-        text, label = self.examples[idx]
-        encoding = self.tokenizer(
-            text,
-            truncation=True,
-            max_length=self.max_length,
-            padding="max_length",
-            return_tensors="pt"
-        )
-        return {
-            "input_ids": encoding["input_ids"].squeeze(0),
-            "attention_mask": encoding["attention_mask"].squeeze(0),
-            "label": torch.tensor(label, dtype=torch.long)
-        }
+from training.pipeline.model import (  # noqa: E402
+    attach_lora, load_local_model_and_tokenizer, resolve_lora_targets,
+    sanitize_adapter_artifacts, set_safe_adapter_metadata, validate_adapter_metadata,
+    validate_peft_model, verify_saved_adapter,
+)
+from training.pipeline.provenance import (  # noqa: E402
+    RUN_MANIFEST_SCHEMA, commit_provenance, config_hash, git_commit,
+    package_versions, plan_output, update_lifecycle, utc_now,
+    write_training_artifacts,
+    write_json_atomic,
+)
+from training.pipeline.trainer import (  # noqa: E402
+    build_trainer, effective_batch_size, resolve_hardware, run_training,
+)
+from training.utils.dataset import split_mapping_digest  # noqa: E402
 
 
-def detect_and_configure_device(requested_mode: str = "auto"):
-    """
-    Detects hardware capabilities and returns configured device + optimization settings.
-    Modes supported:
-      - 'cuda': NVIDIA GPU with AMP (Automatic Mixed Precision)
-      - 'mps': Apple Silicon GPU (Metal Performance Shaders)
-      - 'cpu': Standard multi-threaded CPU execution
-    """
-    mode = requested_mode.lower()
-    
-    if mode == "auto":
-        if torch.cuda.is_available():
-            mode = "cuda"
-        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            mode = "mps"
-        else:
-            mode = "cpu"
+def _selection_summary(records: list[Any], preflight: PreflightResult) -> ScanSummary:
+    return ScanSummary(
+        len(records), dict(Counter(item.label_name for item in records)),
+        dict(Counter(item.sink_category for item in records)),
+        len({item.apk_hash for item in records}),
+        sum(item.internal_truncated for item in records),
+        sum(item.context_truncated for item in records), preflight.summary.stored_records,
+        preflight.summary.rejected_records, preflight.summary.rejection_counts,
+    )
 
-    print(f"[DEVICE] Target Device Mode Selected: [{mode.upper()}]")
 
-    if mode == "cuda":
-        device = torch.device("cuda")
-        torch.backends.cudnn.benchmark = True
-        use_amp = True
-        amp_dtype = torch.float16
-        pin_memory = True
-        print(f"[CUDA] Acceleration Active: {torch.cuda.get_device_name(0)}")
-        print(f"       VRAM Total: {torch.cuda.get_device_properties(0).total_memory / (1024**3):.2f} GB")
-    elif mode == "mps":
-        device = torch.device("mps")
-        use_amp = True
-        amp_dtype = torch.float16
-        pin_memory = False
-        print("[MPS] Apple Silicon Metal Acceleration Active")
+def _selected_hash(records: list[dict[str, Any]]) -> str:
+    encoded = "".join(json.dumps(item, sort_keys=True) + "\n" for item in records).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _batch(dataset: Any, collator: Any, size: int) -> dict[str, torch.Tensor]:
+    iterator = iter(dataset)
+    return collator([next(iterator) for _ in range(min(size, len(dataset)))])
+
+
+def _base_manifest(config: ResolvedConfig, corpus: Any, summary: ScanSummary) -> dict[str, Any]:
+    return {
+        "schema_version": RUN_MANIFEST_SCHEMA, "run_name": config["run"]["name"],
+        "mode": config["run"]["mode"], "status": "prepared", "start_time": utc_now(),
+        "git_commit": git_commit(), "dataset_version": corpus.manifest["dataset_version"],
+        "split_digest": split_mapping_digest(corpus.splits),
+        "tokenizer_fingerprint": corpus.tokenizer_fingerprint,
+        "normalization_version": corpus.manifest.get("normalization_version"),
+        "slicer_version": corpus.manifest.get("slicer_version"),
+        "sampler": config["data"]["sampler"], "summary": summary.__dict__,
+    }
+
+
+def _log_summary(summary: ScanSummary) -> None:
+    print(f"[DATA] eligible records: {summary.count}; APKs: {summary.apk_count}")
+    print(f"[DATA] classes: {summary.class_counts}")
+    print(f"[DATA] categories: {summary.category_counts}")
+    print(f"[DATA] rejected: {summary.rejected_records} {summary.rejection_counts or {}}")
+    print(f"[DATA] internal/context truncated: {summary.internal_truncated}/{summary.context_truncated}")
+
+
+def run_pipeline(config_path: Path, config: ResolvedConfig) -> None:
+    output = plan_output(config)
+    corpus = load_corpus(config)
+    train_preflight = preflight_split(corpus, config, config["data"]["train_split"])
+    mode = config["run"]["mode"]
+    if mode == "smoke":
+        records = select_smoke_records(corpus, config, train_preflight)
+        train_dataset: Any = TinyDataset(records)
+        eval_dataset = None
+        summary = _selection_summary(records, train_preflight)
+        selected = [record.manifest_fields() for record in records]
+    elif mode == "tiny_overfit":
+        records = select_tiny_records(corpus, config, train_preflight)
+        train_dataset = TinyDataset(records)
+        eval_dataset = train_dataset
+        summary = _selection_summary(records, train_preflight)
+        selected = [record.manifest_fields() for record in records]
     else:
-        device = torch.device("cpu")
-        use_amp = False
-        amp_dtype = torch.float32
-        pin_memory = False
-        num_threads = torch.get_num_threads()
-        print(f"[CPU] Fallback Active (Threads: {num_threads})")
-
-    return device, use_amp, amp_dtype, pin_memory
-
-
-def load_base_model_and_tokenizer(model_name: str):
-    """Loads tokenizer and base Transformer classification model."""
-    print(f"[MODEL] Loading Tokenizer and Base Model: '{model_name}'...")
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
-    except Exception as e:
-        print(f"[WARN] Primary model load failed ({e}). Falling back to '{FALLBACK_MODEL_NAME}'...")
-        tokenizer = AutoTokenizer.from_pretrained(FALLBACK_MODEL_NAME)
-        model = AutoModelForSequenceClassification.from_pretrained(FALLBACK_MODEL_NAME, num_labels=2)
-
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token or "[PAD]"
-        model.config.pad_token_id = tokenizer.pad_token_id
-
-    return tokenizer, model
-
-
-def apply_lora_peft(model):
-    """Applies LoRA (Low-Rank Adaptation) adapter configuration."""
-    print("[LORA] Applying LoRA/PEFT Adapters to Attention Layers...")
-    
-    # Try all-linear first (supports ModernBert, BERT, RoBERTa)
-    try:
-        lora_config = LoraConfig(
-            task_type=TaskType.SEQ_CLS,
-            r=8,
-            lora_alpha=16,
-            target_modules="all-linear",
-            lora_dropout=0.05,
-            bias="none"
+        train_dataset = TokenShardIterableDataset(
+            corpus, config, config["data"]["train_split"], train_preflight,
         )
-        model = get_peft_model(model, lora_config)
-    except Exception as e:
-        print(f"[WARN] 'all-linear' target_modules failed ({e}). Trying fallback layer names...")
-        candidate_modules = ["in_proj", "out_proj", "Wqkv", "Wo", "query", "value", "key", "q_proj", "v_proj", "k_proj"]
-        lora_config = LoraConfig(
-            task_type=TaskType.SEQ_CLS,
-            r=8,
-            lora_alpha=16,
-            target_modules=candidate_modules,
-            lora_dropout=0.05,
-            bias="none"
-        )
-        model = get_peft_model(model, lora_config)
+        summary = train_preflight.summary
+        selected = list(train_preflight.records)
+        eval_dataset = None
+        if mode == "train":
+            evaluation = preflight_split(corpus, config, config["data"]["eval_split"])
+            eval_dataset = TokenShardIterableDataset(
+                corpus, config, config["data"]["eval_split"], evaluation,
+            )
 
-    model.print_trainable_parameters()
-    return model
+    manifest = _base_manifest(config, corpus, summary)
+    if mode == "dry_run":
+        tokenizer = load_local_tokenizer(corpus, config)
+        batch = _batch(train_dataset, create_collator(tokenizer, config),
+                       config["trainer"]["per_device_train_batch_size"])
+        manifest.update({
+            "status": "completed",
+            "end_time": utc_now(),
+            "batch": {"input_ids_shape": list(batch["input_ids"].shape),
+                      "attention_mask_shape": list(batch["attention_mask"].shape),
+                      "labels_shape": list(batch["labels"].shape),
+                      "pad_token_id": tokenizer.pad_token_id},
+        })
+        commit_provenance(output, config_path, config, selected, manifest)
+        _log_summary(summary)
+        print(f"[BATCH] input_ids={tuple(batch['input_ids'].shape)} attention_mask={tuple(batch['attention_mask'].shape)} labels={tuple(batch['labels'].shape)}")
+        print(f"[SAVE] {output.directory}")
+        return
 
+    tokenizer, base_model = load_local_model_and_tokenizer(config)
+    validate_tokenizer(corpus, tokenizer)
+    targets = resolve_lora_targets(base_model)
+    model = attach_lora(base_model, targets)
+    base_identifier = set_safe_adapter_metadata(model, config["model"]["checkpoint"])
+    parameters = validate_peft_model(model)
+    hardware = resolve_hardware(config)
+    collator = create_collator(tokenizer, config)
+    inspection_batch = _batch(train_dataset, collator, config["trainer"]["per_device_train_batch_size"])
+    model.eval()
+    with torch.no_grad():
+        logits = model(input_ids=inspection_batch["input_ids"],
+                       attention_mask=inspection_batch["attention_mask"]).logits
+    if tuple(logits.shape) != (len(inspection_batch["labels"]), 2):
+        raise ValueError(f"Expected [batch, 2] logits, got {tuple(logits.shape)}")
 
-def train_model(
-    train_data_path: str = DEFAULT_TRAIN_DATA,
-    output_dir: str = DEFAULT_OUTPUT_DIR,
-    device_mode: str = "auto",
-    epochs: int = 3,
-    batch_size: int = 8,
-    learning_rate: float = 2e-4
-):
-    """
-    Main training execution function with dual GPU (CUDA / Apple MPS) & CPU support.
-    """
-    print("==========================================================")
-    print("[KAVACH] SecureBERT-2.0 LoRA Fine-Tuning Pipeline")
-    print("==========================================================")
-
-    # 1. Device Setup
-    device, use_amp, amp_dtype, pin_memory = detect_and_configure_device(device_mode)
-
-    # 2. Tokenizer & Model
-    tokenizer, base_model = load_base_model_and_tokenizer(DEFAULT_MODEL_NAME)
-    model = apply_lora_peft(base_model)
-    model.to(device)
-
-    # 3. Dataset & Dataloader
-    dataset = SmaliSliceDataset(train_data_path, tokenizer)
-    dataloader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        pin_memory=pin_memory
+    versions = package_versions()
+    aggregate = {
+        "config_sha256": config_hash(config), "summary": summary.__dict__,
+        "dataset_version": corpus.manifest["dataset_version"],
+        "split_digest": split_mapping_digest(corpus.splits),
+        "tokenizer_fingerprint": corpus.tokenizer_fingerprint,
+        "sampler": config["data"]["sampler"], "lora": config["lora"],
+        "lora_match_count": len(targets), "parameters": parameters.serializable(),
+        "hardware": hardware.__dict__, "package_versions": versions,
+    }
+    trainer = build_trainer(
+        config, model, train_dataset, eval_dataset, collator, tokenizer,
+        output_dir=output.directory, selected_records_hash=_selected_hash(selected),
+        aggregate_counts=aggregate,
+    )
+    manifest.update({
+        "hardware": hardware.__dict__, "package_versions": versions,
+        "effective_batch_size": effective_batch_size(config),
+        "lora_match_count": len(targets), "trainable_parameters": parameters.serializable(),
+        "model": {"identifier": base_identifier, "model_type": base_model.config.model_type,
+                  "num_hidden_layers": base_model.config.num_hidden_layers,
+                  "max_position_embeddings": base_model.config.max_position_embeddings},
+    })
+    commit_provenance(output, config_path, config, selected, manifest)
+    write_training_artifacts(
+        output.directory, environment={"hardware": hardware.__dict__, "package_versions": versions,
+                                       "git_commit": git_commit()},
+        lora_targets={"matched_modules": list(targets), "settings": config["lora"]},
+        trainable_parameters={**parameters.serializable(),
+                              "names": [name for name, value in model.named_parameters() if value.requires_grad]},
     )
 
-    # 4. Optimizer & Scheduler
-    optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
-    total_steps = len(dataloader) * epochs
-    scheduler = get_linear_schedule_with_warmup(
-        optimizer,
-        num_warmup_steps=int(total_steps * 0.1),
-        num_training_steps=total_steps
-    )
+    def transition(status: str, details: dict[str, Any]) -> None:
+        update_lifecycle(output.directory, status, **details)
 
-    # 5. Training Loop
-    from tqdm import tqdm
-    print(f"\n[TRAIN] Starting Fine-Tuning Loop ({epochs} Epochs, {len(dataset)} Samples)...")
-    scaler = torch.cuda.amp.GradScaler() if (use_amp and device.type == "cuda") else None
-
-    for epoch in range(epochs):
-        model.train()
-        total_loss = 0.0
-        
-        progress_bar = tqdm(
-            dataloader, 
-            desc=f"Epoch {epoch + 1}/{epochs}", 
-            unit="batch",
-            leave=True
+    def finalize(result: Any) -> None:
+        sanitize_adapter_artifacts(result.adapter_path, base_identifier)
+        adapter = validate_adapter_metadata(result.adapter_path, base_identifier)
+        reload_check = None
+        if mode == "smoke":
+            batch_ids = [item["example_id"] for item in selected[:len(inspection_batch["labels"])]]
+            reload_check = verify_saved_adapter(
+                model, config["model"]["checkpoint"], result.adapter_path,
+                {"input_ids": inspection_batch["input_ids"],
+                 "attention_mask": inspection_batch["attention_mask"]},
+                batch_ids,
+            )
+            write_json_atomic(output.directory / "reload-check.json", reload_check)
+        write_training_artifacts(
+            output.directory, environment={"hardware": hardware.__dict__, "package_versions": versions,
+                                           "git_commit": git_commit()},
+            lora_targets={"matched_modules": list(targets), "settings": config["lora"]},
+            trainable_parameters=parameters.serializable(), adapter_metadata=adapter,
+            metrics=result.metrics,
         )
 
-        for step, batch in enumerate(progress_bar):
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-            labels = batch["label"].to(device)
+    _log_summary(summary)
+    run_training(trainer, config, output.directory, transition=transition, finalize=finalize)
 
-            optimizer.zero_grad()
 
-            if use_amp:
-                autocast_device = "cuda" if device.type == "cuda" else "cpu"
-                with torch.amp.autocast(device_type=autocast_device, dtype=amp_dtype):
-                    outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-                    loss = outputs.loss
-            else:
-                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-                loss = outputs.loss
-
-            if scaler is not None:
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                loss.backward()
-                optimizer.step()
-
-            scheduler.step()
-            total_loss += loss.item()
-
-            current_lr = scheduler.get_last_lr()[0]
-            progress_bar.set_postfix({
-                "loss": f"{loss.item():.4f}", 
-                "lr": f"{current_lr:.2e}"
-            })
-
-        avg_loss = total_loss / len(dataloader)
-        print(f"[OK] Epoch {epoch + 1} Complete. Average Loss: {avg_loss:.4f}\n")
-
-    # 6. Save Model Artifacts
-    output_path = Path(output_dir)
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    print(f"[SAVE] Saving trained LoRA weights & tokenizer to: '{output_path.resolve()}'")
-    model.save_pretrained(output_path)
-    tokenizer.save_pretrained(output_path)
-    print("[DONE] Training Complete! Model adapters are ready for backend inference.\n")
+def main(argv: Sequence[str] | None = None) -> None:
+    args = parse_args(argv)
+    run_pipeline(args.config, load_config(args.config, args))
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="SecureBERT-2.0 LoRA Fine-Tuning Script")
-    parser.add_argument("--data_path", type=str, default=DEFAULT_TRAIN_DATA, help="Path to preprocessed slices (.jsonl)")
-    parser.add_argument("--output_dir", type=str, default=DEFAULT_OUTPUT_DIR, help="Directory to save trained weights")
-    parser.add_argument("--device", type=str, default="auto", choices=["auto", "cuda", "mps", "cpu"], help="Hardware acceleration mode")
-    parser.add_argument("--epochs", type=int, default=3, help="Number of training epochs")
-    parser.add_argument("--batch_size", type=int, default=8, help="Training batch size")
-    parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate")
-
-    args = parser.parse_args()
-
-    train_model(
-        train_data_path=args.data_path,
-        output_dir=args.output_dir,
-        device_mode=args.device,
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        learning_rate=args.lr
-    )
-
+    main()
