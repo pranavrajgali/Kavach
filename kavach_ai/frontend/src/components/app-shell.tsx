@@ -2,11 +2,7 @@ import React from 'react';
 import { useDetonation } from '@/context/DetonationContext';
 import { 
   LayoutGrid, Settings, RefreshCw, CreditCard, HelpCircle, BookOpen,
-<<<<<<< HEAD
-  FileCode, ShieldAlert, Cpu, FileText, Activity, Award, Bot
-=======
-  FileCode, ShieldAlert, Cpu, FileText, Activity, Award, FlaskConical
->>>>>>> pr-5
+  FileCode, ShieldAlert, Cpu, FileText, Activity, Award, Bot, FlaskConical
 } from 'lucide-react';
 import { VajraAssistantDrawer } from '@/components/vajra-assistant-drawer';
 

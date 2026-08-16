@@ -1336,6 +1336,8 @@ def test_run_apktool_missing_executable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(decompile.shutil, "which", lambda name: None)
+    orig_exists = decompile.Path.exists
+    monkeypatch.setattr(decompile.Path, "exists", lambda self: False if "chocolatey" in str(self).lower() else orig_exists(self))
     execution = run_apktool(tmp_path / "sample.apk", tmp_path / "out", timeout=1)
     assert not execution.installed
     assert not execution.success
@@ -1416,6 +1418,8 @@ def test_run_jadx_missing_executable_is_warning(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(decompile.shutil, "which", lambda name: None)
+    orig_exists = decompile.Path.exists
+    monkeypatch.setattr(decompile.Path, "exists", lambda self: False if "chocolatey" in str(self).lower() else orig_exists(self))
     execution = run_jadx(tmp_path / "sample.apk", tmp_path / "jadx", timeout=1)
     issues = decompile._jadx_execution_issues(execution)
 
