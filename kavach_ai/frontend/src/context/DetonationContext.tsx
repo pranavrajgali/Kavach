@@ -404,9 +404,27 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   // --- Connected Shared RAG Agent State ---
-  const [ragMessages, setRagMessages] = useState<ChatMessage[]>([]);
+  const [ragMessages, setRagMessages] = useState<ChatMessage[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('vajra_rag_messages');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
   const [isRagStreaming, setIsRagStreaming] = useState<boolean>(false);
   const ragAbortControllerRef = React.useRef<AbortController | null>(null);
+
+  // Sync to sessionStorage on changes
+  useEffect(() => {
+    try {
+      if (ragMessages.length > 0) {
+        sessionStorage.setItem('vajra_rag_messages', JSON.stringify(ragMessages));
+      }
+    } catch {}
+  }, [ragMessages]);
 
   const generateWelcomeMessage = (details: ApkDetails | null, staticRes: StaticScanResults | null): string => {
     const pkg = details?.package || staticRes?.apk_details?.package || "com.shinhan.three";
@@ -569,6 +587,9 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const clearRagSession = () => {
+    try {
+      sessionStorage.removeItem('vajra_rag_messages');
+    } catch {}
     const welcome = generateWelcomeMessage(apkDetails, staticResults);
     setRagMessages([
       {
