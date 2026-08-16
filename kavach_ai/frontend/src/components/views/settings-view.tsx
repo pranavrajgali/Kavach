@@ -70,7 +70,7 @@ export const SettingsView: React.FC = () => {
                 <span className="text-primary font-mono">{detonationDuration}s</span>
               </div>
               <div className="flex gap-2">
-                {[15, 30, 60, 120].map(val => (
+                {[10, 15, 30, 60, 120].map(val => (
                   <button 
                     key={val} onClick={() => setDetonationDuration(val)}
                     className={`flex-1 py-2 text-xs font-semibold border ${detonationDuration === val ? 'bg-primary text-primary-foreground border-primary' : 'bg-transparent text-muted-foreground border-border hover:border-primary/50'}`}

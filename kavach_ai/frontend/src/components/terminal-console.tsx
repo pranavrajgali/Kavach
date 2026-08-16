@@ -5,7 +5,7 @@ import { Terminal } from 'lucide-react';
 export const TerminalConsole: React.FC = () => {
   const { logs, apkDetails, detonationDuration, currentView, staticScanStatus } = useDetonation();
   const [timeLeft, setTimeLeft] = useState<number>(detonationDuration);
-  const terminalEndRef = useRef<HTMLDivElement>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
 
   const isStaticMode = currentView === 'static_scan';
 
@@ -28,9 +28,11 @@ export const TerminalConsole: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Auto-scroll terminal logs to bottom on new additions
+  // Auto-scroll terminal log box internally to bottom on new additions
   useEffect(() => {
-    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
   }, [logs]);
 
   // Dynamic checkpoint resolver based on log content
@@ -135,7 +137,7 @@ export const TerminalConsole: React.FC = () => {
           </div>
           
           {/* Scrollable Log Output */}
-          <div className="flex-1 p-4 overflow-y-auto font-mono text-xs text-muted-foreground space-y-1.5 leading-relaxed selection:bg-primary/20">
+          <div ref={logContainerRef} className="flex-1 p-4 overflow-y-auto font-mono text-xs text-muted-foreground space-y-1.5 leading-relaxed selection:bg-primary/20">
             {logs.length === 0 ? (
               <div className="text-muted-foreground/45 italic">Waiting for analysis logs...</div>
             ) : (
@@ -187,7 +189,6 @@ export const TerminalConsole: React.FC = () => {
                 );
               })
             )}
-            <div ref={terminalEndRef} />
           </div>
         </div>
 

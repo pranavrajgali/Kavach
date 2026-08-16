@@ -2,7 +2,11 @@ import React from 'react';
 import { useDetonation } from '@/context/DetonationContext';
 import { 
   LayoutGrid, Settings, RefreshCw, CreditCard, HelpCircle, BookOpen,
+<<<<<<< HEAD
   FileCode, ShieldAlert, Cpu, FileText, Activity, Award, Bot
+=======
+  FileCode, ShieldAlert, Cpu, FileText, Activity, Award, FlaskConical
+>>>>>>> pr-5
 } from 'lucide-react';
 import { VajraAssistantDrawer } from '@/components/vajra-assistant-drawer';
 
@@ -21,7 +25,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground font-sans selection:bg-primary/20">
       {/* 1. Left Fixed Sidebar */}
-      <aside className="w-64 shrink-0 border-r border-border bg-card flex flex-col justify-between rounded-none">
+      <aside className="w-64 shrink-0 border-r border-border bg-card flex flex-col justify-between rounded-none overflow-y-auto max-h-screen scrollbar-thin">
         
         {/* Top Section */}
         <div>
@@ -140,6 +144,17 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               >
                 <FileText className="w-3.5 h-3.5" />
                 Kavach AI Report
+              </button>
+              <button 
+                onClick={() => setCurrentView('investigation_plan')}
+                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
+                  currentView === 'investigation_plan'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                }`}
+              >
+                <FlaskConical className="w-3.5 h-3.5" />
+                Investigation Plan
               </button>
               <button 
                 onClick={() => setCurrentView('sandbox_health')}

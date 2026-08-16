@@ -3,20 +3,50 @@ import { FileText, Download, CheckSquare } from 'lucide-react';
 import { useDetonation } from '@/context/DetonationContext';
 
 export const CertInView: React.FC = () => {
-  const { apkDetails, jobId } = useDetonation();
+  const { apkDetails, jobId, staticScanStatus, status } = useDetonation();
   const [reportData, setReportData] = useState<any>(null);
 
   useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+    // Never keep a prior APK's compliance data visible while a new job loads.
+    setReportData(null);
+
+    const fetchReport = async () => {
+      if (!jobId) return;
+      try {
+        const res = await fetch(`/api/report/${jobId}`, { signal: controller.signal });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted && data.status === 'success') {
+          setReportData(data.report);
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+        console.error('Failed to fetch CERT-In report:', err);
+      }
+    };
+
     if (jobId) {
-      fetch(`/api/report/${jobId}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.status === 'success') {
-            setReportData(data.report);
-          }
-        });
+      fetchReport();
     }
-  }, [jobId]);
+
+    const interval = setInterval(() => {
+      if (jobId) {
+        fetchReport();
+      }
+    }, 2500);
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+      clearInterval(interval);
+    };
+  }, [jobId, staticScanStatus, status]);
+
+  if (!jobId) {
+    return <div className="p-8 text-center text-muted-foreground">No CERT-In report is available until an APK analysis creates a job.</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -46,7 +76,7 @@ export const CertInView: React.FC = () => {
           <div className="grid grid-cols-3 gap-4 border-b border-border/50 pb-4">
             <div className="col-span-1 text-muted-foreground font-semibold">2. Type of Incident:</div>
             <div className="col-span-2 text-foreground flex items-center gap-2">
-              <CheckSquare className="w-4 h-4 text-primary" /> {reportData?.incident_type || 'Malicious Code (Malware / Spyware / Trojan)'}
+              <CheckSquare className="w-4 h-4 text-primary" /> {reportData?.incident_type || 'Awaiting verified analysis'}
             </div>
           </div>
 
@@ -75,19 +105,7 @@ export const CertInView: React.FC = () => {
                     {JSON.stringify(reportData.indicators_of_compromise)}
                   </div>
                 )
-              ) : (
-                <>
-                  <div className="bg-black/40 p-2 border border-border">
-                    <span className="text-destructive font-semibold">Network:</span> Attempted connection to 103.45.XX.XX:8080 (TCP)
-                  </div>
-                  <div className="bg-black/40 p-2 border border-border">
-                    <span className="text-destructive font-semibold">Host:</span> Dynamic loading of hidden DEX payloads via `DexClassLoader`.
-                  </div>
-                  <div className="bg-black/40 p-2 border border-border">
-                    <span className="text-destructive font-semibold">Behavior:</span> Automated interception and exfiltration of SMS messages.
-                  </div>
-                </>
-              )}
+              ) : <div className="text-muted-foreground">Awaiting verified indicators for this APK.</div>}
             </div>
           </div>
 

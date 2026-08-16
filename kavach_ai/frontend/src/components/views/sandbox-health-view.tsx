@@ -19,16 +19,22 @@ export const SandboxHealthView: React.FC = () => {
   const { isAdbConnected, simulationMode } = useDetonation();
   const [healthData, setHealthData] = useState<SystemHealthData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [backendConnected, setBackendConnected] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchHealth = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/system-health');
-      if (res.ok) {
-        const data: SystemHealthData = await res.json();
-        setHealthData(data);
+      const res = await fetch('/api/system-health');
+      if (!res.ok) {
+        throw new Error(`Health endpoint returned ${res.status}`);
       }
+      const data: SystemHealthData = await res.json();
+      setHealthData(data);
+      setBackendConnected(true);
+      setError(null);
     } catch (err) {
-      console.error('Failed to fetch system health:', err);
+      setBackendConnected(false);
+      setError(err instanceof Error ? err.message : 'Failed to fetch system health');
     } finally {
       setLoading(false);
     }
@@ -36,14 +42,13 @@ export const SandboxHealthView: React.FC = () => {
 
   useEffect(() => {
     fetchHealth();
-    // Poll real-time system metrics every 3 seconds
     const interval = setInterval(fetchHealth, 3000);
     return () => clearInterval(interval);
   }, []);
 
-  const adbActive = healthData ? healthData.adb_daemon : isAdbConnected || simulationMode;
-  const fridaActive = healthData ? healthData.frida_server : true;
-  const ebpfActive = healthData ? healthData.ebpf_probes : true;
+  const adbActive = healthData ? healthData.adb_daemon : isAdbConnected;
+  const fridaActive = healthData ? healthData.frida_server : false;
+  const ebpfActive = healthData ? healthData.ebpf_probes : false;
 
   return (
     <div className="space-y-6">
@@ -60,15 +65,30 @@ export const SandboxHealthView: React.FC = () => {
             <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-          <span className="px-2 py-1 text-xs font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Live Backend Connected
+          <span className={`px-2 py-1 text-xs font-semibold border flex items-center gap-1.5 ${
+            backendConnected
+              ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+              : 'bg-destructive/10 text-destructive border-destructive/20'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${backendConnected ? 'bg-emerald-500 animate-pulse' : 'bg-destructive'}`} />
+            {backendConnected ? 'Live Backend Connected' : 'Backend Unreachable'}
           </span>
         </div>
       </div>
 
+      {simulationMode && (
+        <div className="border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-400">
+          Simulation mode is enabled. Dynamic Sandbox will emit artifact-keyed telemetry without requiring an attached ADB device.
+        </div>
+      )}
+
+      {error && !backendConnected && (
+        <div className="border border-destructive/20 bg-destructive/5 px-4 py-3 text-xs text-destructive">
+          {error}. Start the API on port 8000, then refresh this page.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Status Indicators */}
         <div className="col-span-1 space-y-4">
           <div className="p-4 border border-border bg-card/30 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -114,17 +134,16 @@ export const SandboxHealthView: React.FC = () => {
           </div>
         </div>
 
-        {/* Emulator Telemetry Gauges */}
         <div className="col-span-1 md:col-span-2 grid grid-cols-2 gap-4">
           <div className="p-4 border border-border bg-card/30 flex flex-col items-center justify-center h-32">
             <span className="text-3xl font-bold text-foreground">
-              {healthData ? `${healthData.cpu_usage}%` : '34%'}
+              {healthData ? `${healthData.cpu_usage}%` : '—'}
             </span>
             <span className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Host CPU Usage</span>
           </div>
           <div className="p-4 border border-border bg-card/30 flex flex-col items-center justify-center h-32">
             <span className="text-3xl font-bold text-foreground">
-              {healthData ? `${healthData.ram_used_gb} GB` : '1.2 GB'}
+              {healthData ? `${healthData.ram_used_gb} GB` : '—'}
             </span>
             <span className="text-xs text-muted-foreground uppercase tracking-wider mt-1">
               {healthData ? `RAM (${healthData.ram_percent}% of ${healthData.ram_total_gb} GB)` : 'RAM Usage'}
@@ -132,7 +151,6 @@ export const SandboxHealthView: React.FC = () => {
           </div>
         </div>
 
-        {/* Worker Process Logs */}
         <div className="col-span-1 md:col-span-3 border border-border bg-black/60 rounded-none overflow-hidden flex flex-col h-64">
           <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-card/50">
             <Terminal className="w-4 h-4 text-muted-foreground" />
@@ -149,11 +167,7 @@ export const SandboxHealthView: React.FC = () => {
                 </div>
               ))
             ) : (
-              <>
-                <div className="text-emerald-500">[2026-07-29 14:00:10] INFO: kavach.worker.manager - Sandbox environment initialized.</div>
-                <div>[2026-07-29 14:00:11] INFO: adb.client - Waiting for device connection...</div>
-                <div className="text-emerald-500">[2026-07-29 14:00:12] INFO: adb.client - Device connected.</div>
-              </>
+              <div>Waiting for backend health logs...</div>
             )}
           </div>
         </div>

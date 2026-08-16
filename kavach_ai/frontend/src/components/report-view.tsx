@@ -98,20 +98,20 @@ export const ReportView: React.FC = () => {
     if (!intel) {
       return <span className="text-muted-foreground/60 italic text-[11px]">Resolving details...</span>;
     }
-    const geo = intel.geolocation;
+    const geo = intel.geolocation || {};
     return (
       <div className="space-y-0.5 text-[11px] leading-relaxed text-muted-foreground font-mono">
-        <div>IP: <span className="text-foreground font-semibold">{intel.resolved_ip}</span></div>
-        <div>Country: <span className="text-foreground">{geo.country}</span></div>
-        {geo.region !== "Unknown" && <div>Region: <span className="text-foreground">{geo.region}</span></div>}
-        {geo.city !== "Unknown" && <div>City: <span className="text-foreground">{geo.city}</span></div>}
-        {geo.latitude !== 0 && (
+        <div>IP: <span className="text-foreground font-semibold">{intel.resolved_ip || host}</span></div>
+        <div>Country: <span className="text-foreground">{geo.country || 'Unknown'}</span></div>
+        {geo.region && geo.region !== "Unknown" && <div>Region: <span className="text-foreground">{geo.region}</span></div>}
+        {geo.city && geo.city !== "Unknown" && <div>City: <span className="text-foreground">{geo.city}</span></div>}
+        {geo.latitude ? (
           <>
             <div>Latitude: <span className="text-foreground">{geo.latitude}</span></div>
             <div>Longitude: <span className="text-foreground">{geo.longitude}</span></div>
           </>
-        )}
-        {geo.isp !== "Unknown" && <div>ISP/Org: <span className="text-foreground">{geo.isp}</span></div>}
+        ) : null}
+        {geo.isp && geo.isp !== "Unknown" && <div>ISP/Org: <span className="text-foreground">{geo.isp}</span></div>}
         {intel.google_maps_url && (
           <div className="mt-1 font-sans">
             View: <a

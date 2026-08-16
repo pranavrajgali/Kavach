@@ -58,24 +58,13 @@ export const BertClassifierView: React.FC = () => {
   const mlData = staticResults?.ml_metrics;
   const isSampleData = !staticResults;
 
-  // Real or Sample Data
-  const prob = mlData?.malicious_probability ?? 0.89;
-  const isMalicious = (mlData?.verdict || 'MALICIOUS') === 'MALICIOUS';
+  // Never substitute demo findings for an APK that has not been scanned.
+  const prob = mlData?.malicious_probability ?? 0;
+  const isMalicious = mlData?.verdict === 'MALICIOUS';
   const modelId = mlData?.model_id || 'securebert-full-weighted';
-  const sliceCount = mlData?.slice_count ?? (mlData?.slice_evaluations?.length || 2);
+  const sliceCount = mlData?.slice_count ?? mlData?.slice_evaluations?.length ?? 0;
 
-  const sliceEvals = mlData?.slice_evaluations || [
-    {
-      slice_index: 1,
-      malicious_probability: 0.92,
-      code_snippet: 'Landroid/telephony/SmsManager;->sendTextMessage <- Lcom/evil/malware/Payload;->execute(Ljava/lang/String;)V'
-    },
-    {
-      slice_index: 2,
-      malicious_probability: 0.84,
-      code_snippet: 'Ldalvik/system/DexClassLoader;-><init> <- Lcom/evil/malware/DynamicLoader;->loadClasses()V'
-    }
-  ];
+  const sliceEvals = mlData?.slice_evaluations || [];
 
   const [openAccordion, setOpenAccordion] = useState<number | null>(0);
 
@@ -182,14 +171,14 @@ export const BertClassifierView: React.FC = () => {
           </span>
           <div className="flex items-center justify-between mt-1">
             <span className={`text-2xl font-black ${isMalicious ? 'text-destructive' : 'text-emerald-500'}`}>
-              {isMalicious ? 'MALICIOUS' : 'BENIGN'}
+              {mlData ? (isMalicious ? 'MALICIOUS' : 'BENIGN') : 'PENDING'}
             </span>
             <span className={`text-[10px] font-bold px-2 py-0.5 border ${
               isMalicious 
                 ? 'bg-destructive/10 text-destructive border-destructive/20' 
                 : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
             }`}>
-              {isMalicious ? 'High Risk' : 'Secure'}
+              {mlData ? (isMalicious ? 'High Risk' : 'Secure') : 'No scan'}
             </span>
           </div>
         </div>
@@ -282,7 +271,7 @@ export const BertClassifierView: React.FC = () => {
             
             <div className="text-center">
               <span className={`text-xs font-bold ${isMalicious ? 'text-destructive' : 'text-emerald-500'}`}>
-                {isMalicious ? 'MALICIOUS ACTIVITY DETECTED' : 'CLEAN BACKBONE VERDICT'}
+                {mlData ? (isMalicious ? 'MALICIOUS ACTIVITY DETECTED' : 'CLEAN BACKBONE VERDICT') : 'AWAITING APK SCAN'}
               </span>
             </div>
           </div>

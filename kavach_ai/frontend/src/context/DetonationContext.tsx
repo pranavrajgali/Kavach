@@ -94,7 +94,7 @@ export interface ChatMessage {
 
 interface DetonationContextType {
   status: 'landing' | 'analyzing' | 'completed' | 'error';
-  currentView: 'dashboard' | 'scorecard' | 'static_scan' | 'bert_classifier' | 'mitre_map' | 'cert_in' | 'sandbox_health' | 'api_credentials' | 'settings' | 'kavach_report' | 'rag_agent';
+  currentView: 'dashboard' | 'scorecard' | 'static_scan' | 'bert_classifier' | 'mitre_map' | 'cert_in' | 'sandbox_health' | 'api_credentials' | 'settings' | 'kavach_report' | 'rag_agent' | 'investigation_plan';
   apkDetails: ApkDetails | null;
   jobId: string | null;
   logs: string[];
@@ -104,7 +104,7 @@ interface DetonationContextType {
   setSimulationMode: (mode: boolean) => void;
   detonationDuration: number;
   setDetonationDuration: (duration: number) => void;
-  setCurrentView: (view: 'dashboard' | 'scorecard' | 'static_scan' | 'bert_classifier' | 'mitre_map' | 'cert_in' | 'sandbox_health' | 'api_credentials' | 'settings' | 'kavach_report' | 'rag_agent') => void;
+  setCurrentView: (view: 'dashboard' | 'scorecard' | 'static_scan' | 'bert_classifier' | 'mitre_map' | 'cert_in' | 'sandbox_health' | 'api_credentials' | 'settings' | 'kavach_report' | 'rag_agent' | 'investigation_plan') => void;
   viewScorecard: () => void;
   viewDashboard: () => void;
   loadRecentScan: () => Promise<void>;
@@ -135,7 +135,7 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [logs, setLogs] = useState<string[]>([]);
   const [telemetry, setTelemetry] = useState<TelemetryPayload | null>(null);
   const [simulationMode, setSimulationMode] = useState<boolean>(false);
-  const [isAdbConnected, setIsAdbConnected] = useState<boolean>(true);
+  const [isAdbConnected, setIsAdbConnected] = useState<boolean>(false);
   const [detonationDuration, setDetonationDuration] = useState<number>(10);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -159,9 +159,27 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [staticScanStatus, setStaticScanStatus] = useState<'landing' | 'analyzing' | 'completed' | 'error'>('landing');
   const [staticResults, setStaticResults] = useState<StaticScanResults | null>(null);
 
-  // Fetch available models from backend on mount
+  const consumeSseBuffer = (rawBuffer: string, onEvent: (data: any) => void) => {
+    const normalized = rawBuffer.replace(/\r\n/g, '\n');
+    const parts = normalized.split('\n\n');
+    const remainder = parts.pop() || '';
+    for (const part of parts) {
+      const lines = part.split('\n');
+      for (const rawLine of lines) {
+        const line = rawLine.trim();
+        if (!line.startsWith('data: ')) continue;
+        try {
+          onEvent(JSON.parse(line.slice(6)));
+        } catch (err) {
+          console.error('Failed to parse SSE payload:', err, line);
+        }
+      }
+    }
+    return remainder;
+  };
+
+  // Fetch available models and live ADB status from backend on mount
   useEffect(() => {
-    setIsAdbConnected(true);
     fetch('/api/models')
       .then((res) => res.json())
       .then((data) => {
@@ -171,6 +189,18 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         }
       })
       .catch((err) => console.warn('Failed to fetch models list:', err));
+
+    const refreshAdb = () => {
+      fetch('/api/system-health')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) setIsAdbConnected(Boolean(data.adb_daemon));
+        })
+        .catch(() => setIsAdbConnected(false));
+    };
+    refreshAdb();
+    const interval = setInterval(refreshAdb, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadRecentScan = async () => {
@@ -191,9 +221,6 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const viewScorecard = () => {
-    if (!telemetry) {
-      loadRecentScan();
-    }
     setCurrentView('scorecard');
   };
 
@@ -215,6 +242,7 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const detonate = async (file: File) => {
     setCurrentFile(file);
     setStatus('analyzing');
+    setJobId(null);
     setLogs([]);
     setTelemetry(null);
     setApkDetails({
@@ -239,43 +267,36 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let rawBuffer = '';
+      let finished = false;
+
+      const applyEvent = (data: any) => {
+        if (data.type === 'log') {
+          setLogs((prev) => [...prev, data.message]);
+        } else if (data.type === 'metadata') {
+          setApkDetails(data.apk_details);
+          if (data.job_id) setJobId(data.job_id);
+        } else if (data.type === 'result') {
+          finished = true;
+          setTelemetry(data.telemetry);
+          setStatus('completed');
+        } else if (data.type === 'error') {
+          finished = true;
+          setLogs((prev) => [...prev, `[Fatal] ${data.message}`]);
+          setStatus('error');
+        }
+      };
 
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
 
         rawBuffer += decoder.decode(value, { stream: true });
-        const normalized = rawBuffer.replace(/\r\n/g, '\n');
-        const parts = normalized.split('\n\n');
-        
-        rawBuffer = parts.pop() || '';
-
-        for (const part of parts) {
-          const lines = part.split('\n');
-          for (const rawLine of lines) {
-            const line = rawLine.trim();
-            if (!line.startsWith('data: ')) continue;
-            
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (data.type === 'log') {
-                setLogs((prev) => [...prev, data.message]);
-              } else if (data.type === 'metadata') {
-                setApkDetails(data.apk_details);
-                if (data.job_id) setJobId(data.job_id);
-              } else if (data.type === 'result') {
-                setTelemetry(data.telemetry);
-                setStatus('completed');
-              } else if (data.type === 'error') {
-                setLogs((prev) => [...prev, `[Fatal] ${data.message}`]);
-                setStatus('error');
-              }
-            } catch (err) {
-              console.error('Failed to parse SSE payload:', err, line);
-            }
-          }
-        }
+        rawBuffer = consumeSseBuffer(rawBuffer, applyEvent);
+      }
+      consumeSseBuffer(rawBuffer + '\n\n', applyEvent);
+      if (!finished) {
+        setLogs((prev) => [...prev, '[Fatal] Sandbox stream ended before telemetry was returned.']);
+        setStatus('error');
       }
     } catch (err: any) {
       console.error('SSE connection error:', err);
@@ -289,6 +310,7 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const targetModel = modelId || selectedModelId;
     setStaticScanStatus('analyzing');
     setCurrentView('static_scan');
+    setJobId(null);
     setLogs([]);
     setStaticResults(null);
     setApkDetails({

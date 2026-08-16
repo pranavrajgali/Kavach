@@ -308,9 +308,9 @@ async def get_threat_intel(host: str = Query(..., description="IP or domain to c
     except Exception as e:
         logger.error(f"Error fetching URLhaus threat reputation for {host}: {e}")
         
-    if "198.51.100.42" in ip_address or "4444" in host:
-        reputation_status = "malicious"
-        threat_info.append("Mapped to simulated reverse shell C2 beacon payload.")
+    if ip_address.startswith(("198.51.100.", "203.0.113.", "192.0.2.")) or "4444" in host:
+        reputation_status = "malicious" if "4444" in host or ip_address.startswith("198.51.100.") else "suspicious"
+        threat_info.append("Mapped to a reserved documentation-range simulation endpoint.")
         
     maps_url = f"https://www.google.com/maps?q={geo_data['latitude']},{geo_data['longitude']}" if geo_data['latitude'] != 0.0 else None
     

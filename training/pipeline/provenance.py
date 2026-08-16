@@ -46,12 +46,14 @@ def sanitize_metadata(value: Any) -> Any:
         return [sanitize_metadata(item) for item in value]
     if isinstance(value, Path):
         value = str(value)
-    if isinstance(value, str) and Path(value).is_absolute():
+    if isinstance(value, str):
         path = Path(value)
-        try:
-            return str(path.relative_to(REPO_ROOT))
-        except ValueError:
-            return f"<redacted>/{path.name}"
+        if path.is_absolute() or value.startswith("/") or value.startswith("\\"):
+            try:
+                rel = path.relative_to(REPO_ROOT)
+                return rel.as_posix()
+            except ValueError:
+                return f"<redacted>/{path.name}"
     return value
 
 

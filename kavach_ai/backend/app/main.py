@@ -36,8 +36,10 @@ from kavach_ai.backend.app.db.session import engine
 from kavach_ai.backend.pipeline.stage6_synthesis.merge import merge_telemetry
 from kavach_ai.backend.pipeline.stage6_synthesis.report_gen import generate_report_groq
 from kavach_ai.backend.app.api.endpoints import router
+from kavach_ai.backend.app.api.investigation import router as investigation_router
 from kavach_ai.backend.app.db.session import init_db
 from kavach_ai.backend.pipeline.stage4_dynamic import run_dynamic_analysis_pipeline
+from kavach_ai.backend.pipeline.stage4_dynamic.scripts.ebpf_trace import EBPFTracker
 
 
 @asynccontextmanager
@@ -67,7 +69,9 @@ app.add_middleware(
         "http://localhost:8501",
         "http://127.0.0.1:8501",
         "http://localhost:5173",
+        "http://127.0.0.1:5173",
         "http://localhost:3000",
+        "http://127.0.0.1:3000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -75,6 +79,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(investigation_router)
 
 
 @app.get("/health")
@@ -122,15 +127,23 @@ async def static_scan_stream(
             async with AsyncSession(engine) as session:
                 db_apk = await session.get(APK, apk_hash)
                 if not db_apk:
-                    apk = APK(apk_hash=apk_hash, job_id=job_id, filename=file.filename, file_size=len(content), status="QUEUED")
+                    apk = APK(apk_hash=apk_hash, job_id=job_id, filename=file.filename, file_size=len(content), status="PROCESSING")
                     session.add(apk)
                 else:
-                    job_id = db_apk.job_id
+                    db_apk.job_id = job_id
+                    db_apk.filename = file.filename
+                    db_apk.file_size = len(content)
+                    db_apk.status = "PROCESSING"
+                    session.add(db_apk)
                 
                 db_cert = (await session.execute(select(CertInReport).where(CertInReport.apk_hash == apk_hash))).scalar_one_or_none()
                 if not db_cert:
                     cert_in = CertInReport(apk_hash=apk_hash, mitre_attack_json={"status": "preliminary"}, report_pdf_path="", compliance_status="PENDING")
                     session.add(cert_in)
+                else:
+                    db_cert.mitre_attack_json = {"status": "preliminary"}
+                    db_cert.compliance_status = "PENDING"
+                    session.add(db_cert)
                 await session.commit()
 
             yield f"data: {json.dumps({'type': 'metadata', 'job_id': job_id, 'apk_hash': apk_hash})}\n\n"
@@ -147,7 +160,7 @@ async def static_scan_stream(
             temp_path = str(upload_path)
             
             yield f"data: {json.dumps({'type': 'log', 'message': 'Resolving Android package identifier & unzipping manifest...'})}\n\n"
-            package_name = get_apk_package_name(temp_path)
+            package_name = get_apk_package_name(temp_path, file.filename)
             yield f"data: {json.dumps({'type': 'log', 'message': f'Package ID resolved: {package_name}'})}\n\n"
 
             yield f"data: {json.dumps({'type': 'log', 'message': 'Running Stage 1 Triage (Manifest, Permissions, Dangerous Combinations)...'})}\n\n"
@@ -202,6 +215,8 @@ async def static_scan_stream(
             p_val = ml_results.get("malicious_probability")
             yield f"data: {json.dumps({'type': 'log', 'message': f'ML Inference complete! Verdict: {v_val} (Probability: {p_val})'})}\n\n"
 
+            final_score_calc = int(triage_data.get("triage_score", 0) * 0.4 + ml_results.get("malicious_probability", 0) * 100 * 0.6)
+
             final_payload = {
                 "apk_details": {
                     "name": file.filename,
@@ -221,13 +236,14 @@ async def static_scan_stream(
                 "job_id": job_id,
                 "apk_hash": apk_hash,
                 "apk_details": final_payload["apk_details"],
-                "final_score": int(triage_data.get("triage_score", 0) * 0.4 + ml_results.get("malicious_probability", 0) * 100 * 0.6),
+                "final_score": final_score_calc,
                 "static_data": {
                     "permissions": triage_data.get("permissions", []),
                     "permission_combinations": triage_data.get("permission_combinations", []),
                     "triage_score": triage_data.get("triage_score", 0),
                     "securebert_probability": ml_results.get("malicious_probability", 0),
-                    "indicators": triage_data.get("manifest_indicators", []) + triage_data.get("code_signals", [])
+                    "indicators": triage_data.get("manifest_indicators", []) + triage_data.get("code_signals", []),
+                    "slices": ml_results.get("slice_evaluations", [])
                 },
                 "dynamic_data": {
                     "syscalls": [],
@@ -239,6 +255,25 @@ async def static_scan_stream(
             try:
                 static_report = generate_report_groq(merged_static)
                 async with AsyncSession(engine) as session:
+                    db_apk = await session.get(APK, apk_hash)
+                    if db_apk:
+                        db_apk.triage_score = float(triage_data.get("triage_score", 0.0))
+                        db_apk.final_score = final_score_calc
+                        db_apk.status = "COMPLETED"
+                        session.add(db_apk)
+
+                    # Persist slices for this APK
+                    for s_eval in ml_results.get("slice_evaluations", []):
+                        s_text = s_eval.get("code_snippet", "")
+                        s_prob = s_eval.get("malicious_probability", 0.0)
+                        slice_obj = SmaliSlice(
+                            apk_hash=apk_hash,
+                            slice_text=s_text[:2000],
+                            source_method="decompiled_sink_slice",
+                            probability_score=s_prob
+                        )
+                        session.add(slice_obj)
+
                     db_cert = (await session.execute(select(CertInReport).where(CertInReport.apk_hash == apk_hash))).scalar_one_or_none()
                     if db_cert:
                         db_cert.mitre_attack_json = static_report
@@ -266,6 +301,7 @@ async def static_scan_stream(
             print(f"[Static Scan Error] Full traceback:\n{tb_str}", file=sys.stderr)
             yield f"data: {json.dumps({'type': 'log', 'message': f'[Error] Static scan failed: {str(e)}'})}\n\n"
             yield f"data: {json.dumps({'type': 'log', 'message': f'[Traceback] {tb_str[:500]}'})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         finally:
             pass # Removed temp_path deletion because we use the persisted upload_path now
 
@@ -336,7 +372,7 @@ async def get_system_health():
         "ram_percent": round(vm.percent, 1),
         "adb_daemon": adb_connected,
         "frida_server": frida_running,
-        "ebpf_probes": True, # Active kernel tracer status
+        "ebpf_probes": os.path.exists("/sys/kernel/debug/tracing"),
         "devices": devices_list,
         "logs": logs
     }
@@ -356,23 +392,36 @@ class AsyncQueueHandler(logging.Handler):
             pass
 
 
-def get_apk_package_name(file_path: str) -> str:
+def get_apk_package_name(file_path: str, filename: str = "") -> str:
     try:
         from pyaxmlparser import APK
         apk = APK(file_path)
-        return apk.package
+        if apk.package and apk.package != "com.unknown.apk.package":
+            return apk.package
     except Exception:
-        try:
-            from androguard.core.apk import APK
-            apk = APK(file_path)
-            return apk.get_package()
-        except Exception:
-            try:
-                from androguard.core.bytecodes.apk import APK
-                apk = APK(file_path)
-                return apk.get_package()
-            except Exception:
-                return "com.unknown.apk.package"
+        pass
+    try:
+        from androguard.core.apk import APK
+        apk = APK(file_path)
+        pkg = apk.get_package()
+        if pkg:
+            return pkg
+    except Exception:
+        pass
+    try:
+        from androguard.core.bytecodes.apk import APK
+        apk = APK(file_path)
+        pkg = apk.get_package()
+        if pkg:
+            return pkg
+    except Exception:
+        pass
+
+    if filename:
+        clean_name = "".join(c if c.isalnum() else "." for c in filename.lower().removesuffix(".apk")).strip(".")
+        if clean_name:
+            return f"com.{clean_name}"
+    return "com.unknown.apk.package"
 
 
 @app.get("/api/recent-scan")
@@ -381,35 +430,19 @@ async def get_recent_scan():
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
         "pipeline", "stage4_dynamic", "telemetry.json"
     )
-    if os.path.exists(telemetry_file):
-        try:
-            with open(telemetry_file, "r") as f:
-                telemetry = json.load(f)
-            return {
-                "status": "success",
-                "apk_details": {
-                    "name": "shinhan_mobile_v3.4.apk",
-                    "size": "24.50 MB",
-                    "package": "com.shinhan.three"
-                },
-                "telemetry": telemetry
-            }
-        except Exception as e:
-            logging.error(f"Error reading telemetry.json: {e}")
-
-    # Fallback to mock tracker payload
-    from backend.pipeline.stage4_dynamic.scripts.ebpf_trace import EBPFTracker
-    tracker = EBPFTracker()
-    telemetry = tracker.generate_mock_telemetry("com.shinhan.three")
-    return {
-        "status": "success",
-        "apk_details": {
-            "name": "shinhan_mobile_v3.4.apk",
-            "size": "24.50 MB",
-            "package": "com.shinhan.three"
-        },
-        "telemetry": telemetry
-    }
+    if not os.path.exists(telemetry_file):
+        raise HTTPException(status_code=404, detail="No sandbox telemetry has been recorded yet.")
+    try:
+        with open(telemetry_file, "r") as f:
+            telemetry = json.load(f)
+        return {
+            "status": "success",
+            "apk_details": telemetry.get("apk_details"),
+            "telemetry": telemetry
+        }
+    except Exception as e:
+        logging.error(f"Error reading telemetry.json: {e}")
+        raise HTTPException(status_code=500, detail="Unable to read the last sandbox telemetry file.")
 
 
 class LLMFridaPreviewRequest(BaseModel):
@@ -481,6 +514,9 @@ async def detonate_stream(
             apk_hash = hashlib.sha256(content).hexdigest()
             job_id = str(uuid.uuid4())
 
+            existing_triage_score = None
+            existing_risk_score = None
+
             async with AsyncSession(engine) as session:
                 db_apk = await session.get(APK, apk_hash)
                 if not db_apk:
@@ -488,15 +524,18 @@ async def detonate_stream(
                     session.add(apk)
                 else:
                     job_id = db_apk.job_id
+                    existing_triage_score = db_apk.triage_score
                 
                 db_cert = (await session.execute(select(CertInReport).where(CertInReport.apk_hash == apk_hash))).scalar_one_or_none()
                 if not db_cert:
                     cert_in = CertInReport(apk_hash=apk_hash, mitre_attack_json={"status": "preliminary"}, report_pdf_path="", compliance_status="PENDING")
                     session.add(cert_in)
+                elif db_cert.mitre_attack_json:
+                    existing_risk_score = db_cert.mitre_attack_json.get("forensic", {}).get("risk_score")
                 await session.commit()
 
             yield f"data: {json.dumps({'type': 'log', 'message': 'Extracting package identifier...'})}\n\n"
-            package_name = get_apk_package_name(temp_path)
+            package_name = get_apk_package_name(temp_path, file.filename)
             
             yield f"data: {json.dumps({'type': 'log', 'message': f'Package ID resolved: {package_name}'})}\n\n"
             
@@ -508,41 +547,36 @@ async def detonate_stream(
             }
             yield f"data: {json.dumps({'type': 'metadata', 'job_id': job_id, 'apk_hash': apk_hash, 'apk_details': apk_details})}\n\n"
 
+            # Determine whether target is malicious from previous static scan or package traits
+            is_malicious_target = None
+            if existing_triage_score is not None:
+                is_malicious_target = existing_triage_score >= 40.0
+            elif existing_risk_score is not None:
+                is_malicious_target = existing_risk_score >= 40
+
             # 2. Run Pipeline (simulation or active VM)
             if simulation:
                 yield f"data: {json.dumps({'type': 'log', 'message': '[Sim] Simulation Mode active. Booting sandbox telemetry...'})}\n\n"
-                mock_logs = [
-                    f"[LLMFrida] Prompting Groq (qwen2.5-coder-32b-instruct) for {package_name} static sinks...",
-                    "[LLMFrida] Successfully synthesized 3 targeted dynamic interceptors.",
-                    "Starting eBPF logging session for: " + package_name,
-                    "Connected Android device found: emulator-5554",
-                    "Installing APK path: " + file.filename,
-                    "Spawning Frida process: hooks injected successfully",
-                    "Bypassing Android Root safeguards... SUCCESS (ro.build.tags spoofed)",
-                    "Bypassing SSL Pinning certification... SUCCESS (TrustAllCerts active)",
-                    "[Time-Dilution] Malware called Thread.sleep(600000ms - 10 min sleep gate)",
-                    "[Time-Dilution] >> DEFUSED! Compressed 600000ms -> 10ms. Execution resumed.",
-                    "[Apex-Fuzzer] Firing broadcast intent: android.intent.action.BOOT_COMPLETED (flag=0x00000020)",
-                    "[Apex-Fuzzer] Receiver stimulated: " + package_name + ".BootReceiver",
-                    "[LLM-Frida-Hook] Intercepted javax.crypto.Cipher.doFinal() Decrypted Plaintext: https://stealer-command-node.xyz/gate.php",
-                    "Tracing kernel IO syscalls: sys_clone, sys_openat, sys_connect",
-                    "Telemetry gather complete. Syncing report JSON..."
-                ]
-                for m_log in mock_logs:
-                    await asyncio.sleep(0.6)
-                    yield f"data: {json.dumps({'type': 'log', 'message': m_log})}\n\n"
-                
-                from backend.pipeline.stage4_dynamic.scripts.ebpf_trace import EBPFTracker
+
                 tracker = EBPFTracker()
-                telemetry = tracker.generate_mock_telemetry(package_name)
-                telemetry["time_dilution_bypass"] = True
-                telemetry["time_dilution_count"] = 1
-                telemetry["llm_frida_intercepts"] = [
-                    "[LLM-Frida-Hook] Intercepted javax.crypto.Cipher.doFinal() Decrypted Plaintext: https://stealer-command-node.xyz/gate.php"
-                ]
-                telemetry["fuzzed_intents"] = [
-                    {"action": "android.intent.action.BOOT_COMPLETED", "flags": "0x00000020", "status": "DELIVERED"}
-                ]
+                telemetry = tracker.generate_mock_telemetry(
+                    package_name,
+                    is_malicious=is_malicious_target,
+                    fingerprint=apk_hash,
+                )
+                telemetry["apk_details"] = {**apk_details, "hash": apk_hash}
+                try:
+                    with open(tracker.output_path, "w") as telemetry_out:
+                        json.dump(telemetry, telemetry_out, indent=2)
+                except OSError as write_error:
+                    logger = logging.getLogger("KavachPipelineStage4")
+                    logger.warning("Could not persist simulation telemetry: %s", write_error)
+
+                mock_logs = tracker.build_console_logs(package_name, file.filename or "uploaded.apk", telemetry)
+                step = max(0.12, min(0.6, duration / max(len(mock_logs), 1)))
+                for m_log in mock_logs:
+                    await asyncio.sleep(step)
+                    yield f"data: {json.dumps({'type': 'log', 'message': m_log})}\n\n"
             else:
                 yield f"data: {json.dumps({'type': 'log', 'message': 'Booting local sandbox orchestration with LLMFrida & Active Evasion Defusal...'})}\n\n"
                 # Run the blocking pipeline execution in a thread
@@ -579,16 +613,17 @@ async def detonate_stream(
                 "indicators": []
             }
             
+            apk = None
             async with AsyncSession(engine) as session:
+                apk_res = await session.execute(select(APK).where(APK.apk_hash == apk_hash))
+                apk = apk_res.scalar_one_or_none()
+                
                 db_cert = (await session.execute(select(CertInReport).where(CertInReport.apk_hash == apk_hash))).scalar_one_or_none()
                 if db_cert and db_cert.mitre_attack_json:
                     prev_report = db_cert.mitre_attack_json
                     prev_forensic = prev_report.get("forensic", {})
                     
-                    apk_res = await session.execute(select(APK).where(APK.apk_hash == apk_hash))
-                    apk = apk_res.scalar_one_or_none()
                     triage_score = apk.triage_score if (apk and apk.triage_score is not None) else 0.0
-                    
                     risk_score = prev_forensic.get("risk_score", 0)
                     
                     slices_res = await session.execute(select(SmaliSlice).where(SmaliSlice.apk_hash == apk_hash))
@@ -607,25 +642,22 @@ async def detonate_stream(
                     }
 
             merged = merge_telemetry(static_data=actual_static, dynamic_data=telemetry, job_id=job_id, apk_hash=apk_hash)
-            if apk:
-                file_size_mb = apk.file_size / (1024 * 1024)
-                pkg_name = apk.filename
-                if pkg_name.lower().endswith(".apk"):
-                    pkg_name = pkg_name[:-4]
-                merged["apk_details"] = {
-                    "name": apk.filename,
-                    "size": f"{file_size_mb:.2f} MB",
-                    "package": pkg_name,
-                    "hash": apk_hash
-                }
-            report = generate_report_groq(merged)
-            
-            async with AsyncSession(engine) as session:
-                db_cert = (await session.execute(select(CertInReport).where(CertInReport.apk_hash == apk_hash))).scalar_one_or_none()
-                if db_cert:
-                    db_cert.mitre_attack_json = report
-                    session.add(db_cert)
-                await session.commit()
+            merged["apk_details"] = {
+                "name": file.filename,
+                "size": f"{file_size_mb:.2f} MB",
+                "package": package_name,
+                "hash": apk_hash
+            }
+            try:
+                report = generate_report_groq(merged)
+                async with AsyncSession(engine) as session:
+                    db_cert = (await session.execute(select(CertInReport).where(CertInReport.apk_hash == apk_hash))).scalar_one_or_none()
+                    if db_cert:
+                        db_cert.mitre_attack_json = report
+                        session.add(db_cert)
+                    await session.commit()
+            except Exception as report_error:
+                yield f"data: {json.dumps({'type': 'log', 'message': f'[Warn] Report generation failed: {report_error}. Sandbox telemetry is still available.'})}\n\n"
 
             # Progressive RAG Auto-Indexing: Enrich with dynamic Frida intercepts & eBPF syscalls
             try:
@@ -642,6 +674,7 @@ async def detonate_stream(
 
         except Exception as e:
             yield f"data: {json.dumps({'type': 'log', 'message': f'[Error] Analysis failed: {str(e)}'})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
         finally:
             # Clean up handlers
             for l in loggers:
@@ -653,7 +686,12 @@ async def detonate_stream(
                 except Exception:
                     pass
 
-    return StreamingResponse(sse_generator(), media_type="text/event-stream")
+    sse_headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no"
+    }
+    return StreamingResponse(sse_generator(), media_type="text/event-stream", headers=sse_headers)
 
 @app.get("/api/report/{job_id}")
 async def get_report(job_id: str):

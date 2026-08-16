@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useDetonation } from '@/context/DetonationContext';
 import { 
   ShieldAlert, Eye, ArrowLeft, Download, Printer, Search
@@ -15,15 +15,9 @@ export interface FindingItem {
 }
 
 export const KavachScorecard: React.FC = () => {
-  const { telemetry, staticResults, apkDetails, viewDashboard, loadRecentScan, simulationMode } = useDetonation();
+  const { telemetry, staticResults, apkDetails, viewDashboard, simulationMode } = useDetonation();
   const [filterSeverity, setFilterSeverity] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
-
-  useEffect(() => {
-    if (!telemetry && !staticResults) {
-      loadRecentScan();
-    }
-  }, [telemetry, staticResults, loadRecentScan]);
 
   const { securityScore, grade, riskRating, privacyRiskScore, privacyRiskLevel, findings } = useMemo(() => {
     const objectionRoot = telemetry?.objection_root_bypass || false;
@@ -93,7 +87,8 @@ export const KavachScorecard: React.FC = () => {
     }
 
     // Calculate Privacy Risk Score (0 to 100)
-    let privacyPenalty = simulationMode ? 20 : 0;
+    // Simulation mode itself is not a privacy finding.
+    let privacyPenalty = 0;
     filesAccessed.forEach((f: string) => {
       if (f.includes('shared_prefs') || f.includes('config') || f.includes('user')) privacyPenalty += 25;
     });
@@ -234,6 +229,18 @@ export const KavachScorecard: React.FC = () => {
       return matchesSeverity && matchesSearch;
     });
   }, [findings, filterSeverity, searchQuery]);
+
+  const hasAnalysis = Boolean(telemetry || staticResults);
+
+  if (!hasAnalysis) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
+        <ShieldAlert className="w-10 h-10 text-muted-foreground/50" />
+        <h2 className="text-lg font-bold">No current APK analysis</h2>
+        <p className="max-w-md text-sm text-muted-foreground">Run a static scan or dynamic sandbox analysis first. The scorecard will not load a saved telemetry fixture from an earlier APK.</p>
+      </div>
+    );
+  }
 
   const handlePrint = () => window.print();
 

@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import hashlib
 from .detonate import DetonationOrchestrator
 from .scripts.ebpf_trace import EBPFTracker
 
@@ -13,7 +14,8 @@ def run_dynamic_analysis_pipeline(
     static_sinks: list = None,
     custom_hooks_js: str = None,
     enable_llm_frida: bool = True,
-    enable_fuzzing: bool = True
+    enable_fuzzing: bool = True,
+    job_id: str = None
 ) -> dict:
     """
     Orchestrates the entire Stage 4 Dynamic Sandbox pipeline:
@@ -25,9 +27,11 @@ def run_dynamic_analysis_pipeline(
     """
     logger.info(f"Initiating unified dynamic analysis pipeline for {package_name}...")
     
+    # Use job_id to create unique telemetry file to avoid collisions between concurrent analyses
+    telemetry_filename = f"telemetry_{job_id}.json" if job_id else "telemetry.json"
     telemetry_file = os.path.join(
         os.path.dirname(os.path.abspath(__file__)), 
-        "telemetry.json"
+        telemetry_filename
     )
     
     # 1. Instantiate the Orchestrator
@@ -99,31 +103,17 @@ def run_dynamic_analysis_pipeline(
         tracker.start_trace(package_name)
         
         try:
-            if os.path.exists(telemetry_file):
-                with open(telemetry_file, "r") as f:
-                    data = json.load(f)
-                data["execution_mode"] = "SIMULATION_FALLBACK"
-                data["time_dilution_bypass"] = True
-                data["time_dilution_count"] = 1
-                data["time_dilution_events"] = ["[Kavach-Sandbox] Time dilution: compressed Thread.sleep(600000ms) -> 10ms"]
-                data["llm_frida_intercepts"] = [
-                    "[LLM-Frida-Hook] Intercepted javax.crypto.Cipher.doFinal() Decrypted Plaintext: https://stealer-command-node.xyz/gate.php"
-                ]
-                data["fuzzed_intents"] = [
-                    {"action": "android.intent.action.BOOT_COMPLETED", "flags": "0x00000020", "status": "DELIVERED"}
-                ]
-                with open(telemetry_file, "w") as f:
-                    json.dump(data, f, indent=2)
-                return data
-            return {
-                "execution_mode": "SIMULATION_FALLBACK",
-                "time_dilution_bypass": True,
-                "time_dilution_count": 1,
-                "llm_frida_intercepts": [
-                    "[LLM-Frida-Hook] Intercepted javax.crypto.Cipher.doFinal() Decrypted Plaintext: https://stealer-command-node.xyz/gate.php"
-                ]
-            }
+            fingerprint = package_name
+            try:
+                with open(apk_path, "rb") as apk_file:
+                    fingerprint = hashlib.sha256(apk_file.read()).hexdigest()
+            except OSError:
+                pass
+            telemetry = tracker.generate_mock_telemetry(package_name, fingerprint=fingerprint)
+            with open(telemetry_file, "w") as f:
+                json.dump(telemetry, f, indent=2)
+            return telemetry
         except Exception as e:
             logger.error(f"Failed to read simulation telemetry: {e}")
-            return {"execution_mode": "SIMULATION_FALLBACK"}
+            return tracker.generate_mock_telemetry(package_name, fingerprint=package_name)
 

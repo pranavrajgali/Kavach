@@ -508,7 +508,12 @@ def test_native_output_symlink_is_rejected(tmp_path: Path) -> None:
     outside = tmp_path / "outside"
     output.mkdir()
     outside.mkdir()
-    (output / "arm64-v8a").symlink_to(outside, target_is_directory=True)
+    try:
+        (output / "arm64-v8a").symlink_to(outside, target_is_directory=True)
+    except OSError as err:
+        if getattr(err, "winerror", None) == 1314 or "privilege" in str(err).lower():
+            pytest.skip("Symlink creation requires elevated privileges on Windows")
+        raise
 
     libraries, issues = extract_native_libraries(validated, output)
 
@@ -669,7 +674,12 @@ def test_prepare_workspace_rejects_symlink_target(tmp_path: Path) -> None:
     outside = tmp_path / "outside"
     root.mkdir(parents=True)
     outside.mkdir()
-    (root / APK_HASH).symlink_to(outside, target_is_directory=True)
+    try:
+        (root / APK_HASH).symlink_to(outside, target_is_directory=True)
+    except OSError as err:
+        if getattr(err, "winerror", None) == 1314 or "privilege" in str(err).lower():
+            pytest.skip("Symlink creation requires elevated privileges on Windows")
+        raise
 
     with pytest.raises(ExtractionError) as raised:
         prepare_workspace(APK_HASH, root)

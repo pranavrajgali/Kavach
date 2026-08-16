@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import BigInteger, Column, JSON
@@ -17,7 +17,7 @@ class APK(SQLModel, table=True):
     triage_score: Optional[float] = SQLField(default=None, nullable=True)
     final_score: Optional[int] = SQLField(default=None, nullable=True)
     status: str = SQLField(default="QUEUED", max_length=50, nullable=False, index=True)
-    uploaded_at: datetime = SQLField(default_factory=lambda: datetime.now(UTC), nullable=False)
+    uploaded_at: datetime = SQLField(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
     slices: List["SmaliSlice"] = Relationship(back_populates="apk", cascade_delete=True)
@@ -61,7 +61,7 @@ class CertInReport(SQLModel, table=True):
     mitre_attack_json: Dict[str, Any] = SQLField(default_factory=dict, sa_column=Column(JSON, nullable=False))
     report_pdf_path: str = SQLField(max_length=512, nullable=False)
     compliance_status: str = SQLField(max_length=50, nullable=False)
-    created_at: datetime = SQLField(default_factory=lambda: datetime.now(UTC), nullable=False)
+    created_at: datetime = SQLField(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
     apk: APK = Relationship(back_populates="report")

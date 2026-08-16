@@ -1,41 +1,14 @@
 {
-  "objection_root_bypass": true,
-  "objection_ssl_pinning_bypass": true,
-  "time_dilution_bypass": true,
-  "ebpf_telemetry": {
-    "syscalls": [
-      "sys_clone",
-      "sys_execve",
-      "sys_socket",
-      "sys_connect",
-      "sys_write",
-      "sys_openat"
-    ],
-    "files_accessed": [
-      "/data/user/0/com.bank.trojan/shared_prefs/config.xml",
-      "/proc/self/maps",
-      "/system/bin/app_process32"
-    ],
-    "network_connections": [
-      {
-        "ip": "198.51.100.42",
-        "port": 4444,
-        "protocol": "TCP"
-      },
-      {
-        "ip": "8.8.8.8",
-        "port": 53,
-        "protocol": "UDP"
-      }
-    ]
-  },
   "execution_mode": "SIMULATION_FALLBACK",
-  "time_dilution_count": 1,
-  "time_dilution_events": [
-    "[Kavach-Sandbox] Time dilution: compressed Thread.sleep(600000ms) -> 10ms"
-  ],
+  "simulation_profile": "dynamic-loader",
+  "simulation_fingerprint": "548cbf36d4b1",
+  "objection_root_bypass": false,
+  "objection_ssl_pinning_bypass": true,
+  "time_dilution_bypass": false,
+  "time_dilution_count": 0,
+  "time_dilution_events": [],
   "llm_frida_intercepts": [
-    "[LLM-Frida-Hook] Intercepted javax.crypto.Cipher.doFinal() Decrypted Plaintext: https://stealer-command-node.xyz/gate.php"
+    "[LLM-Frida-Hook] DexClassLoader observed loading an application-private payload for com.184ed09b7a83640f182566d2cc4bc2d30c8a67f33715e4db1e61642e2c168d12"
   ],
   "fuzzed_intents": [
     {
@@ -43,5 +16,43 @@
       "flags": "0x00000020",
       "status": "DELIVERED"
     }
-  ]
+  ],
+  "ebpf_telemetry": {
+    "syscalls": [
+      "sys_openat",
+      "sys_read",
+      "sys_mmap",
+      "sys_socket",
+      "sys_connect"
+    ],
+    "files_accessed": [
+      "/data/user/0/com.184ed09b7a83640f182566d2cc4bc2d30c8a67f33715e4db1e61642e2c168d12/files/update.dex",
+      "/data/user/0/com.184ed09b7a83640f182566d2cc4bc2d30c8a67f33715e4db1e61642e2c168d12/code_cache/payload.jar",
+      "/data/local/tmp/kavach-sim-548cbf36.marker"
+    ],
+    "network_connections": [
+      {
+        "ip": "203.0.113.213",
+        "port": 443,
+        "protocol": "TCP",
+        "status": "connected"
+      }
+    ],
+    "dns_resolutions": [
+      {
+        "domain": "updates.com-184ed09b7a83640f182566d2cc4bc2d30c8a67f33715e4db1e61642e2c168d12.example",
+        "resolved_ip": "203.0.113.213",
+        "status": "resolved"
+      }
+    ],
+    "permissions_exercised": [
+      "android.permission.INTERNET"
+    ]
+  },
+  "apk_details": {
+    "name": "184ed09b7a83640f182566d2cc4bc2d30c8a67f33715e4db1e61642e2c168d12.apk",
+    "size": "12.85 MB",
+    "package": "com.184ed09b7a83640f182566d2cc4bc2d30c8a67f33715e4db1e61642e2c168d12",
+    "hash": "184ed09b7a83640f182566d2cc4bc2d30c8a67f33715e4db1e61642e2c168d12"
+  }
 }

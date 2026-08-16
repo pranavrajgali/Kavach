@@ -119,24 +119,53 @@ const renderMarkdown = (text: string, theme: 'light' | 'dark') => {
 };
 
 export const KavachReportView: React.FC = () => {
-  const { jobId, staticResults, apkDetails } = useDetonation();
+  const { jobId, staticResults, apkDetails, staticScanStatus, status } = useDetonation();
   const [reportData, setReportData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [reportTheme, setReportTheme] = useState<'dark' | 'light'>('light');
 
   useEffect(() => {
-    if (jobId) {
-      setLoading(true);
-      fetch(`/api/report/${jobId}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.status === 'success') {
-            setReportData(data.report);
-          }
-        })
-        .finally(() => setLoading(false));
-    }
-  }, [jobId]);
+    let isMounted = true;
+    const controller = new AbortController();
+
+    // A report view remains mounted when the analyst starts another APK. Clear
+    // the previous payload before the new job id is available so it can never
+    // be rendered under the new target's metadata.
+    setReportData(null);
+    setLoading(Boolean(jobId));
+
+    const fetchReport = async () => {
+      if (!jobId) return;
+      try {
+        const res = await fetch(`/api/report/${jobId}`, { signal: controller.signal });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted && data.status === 'success') {
+          setReportData(data.report);
+        }
+      } catch (err: any) {
+        if (err.name === 'AbortError') return;
+        console.error('Failed to fetch Kavach AI report:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    if (jobId) fetchReport();
+
+    // Poll for report completion if report is missing or currently in preliminary state
+    const interval = setInterval(() => {
+      if (jobId) {
+        fetchReport();
+      }
+    }, 2500);
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+      clearInterval(interval);
+    };
+  }, [jobId, staticScanStatus, status]);
 
   let executiveSummary = reportData?.executive_summary || reportData?.forensic?.summary;
   if (!executiveSummary && reportData?.contradiction_label) {

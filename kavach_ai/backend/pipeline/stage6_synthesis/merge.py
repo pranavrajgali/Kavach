@@ -71,7 +71,59 @@ def _coerce_static(static_data: StaticAnalysisResult | dict) -> StaticAnalysisRe
 def _coerce_dynamic(dynamic_data: DynamicAnalysisResult | dict) -> DynamicAnalysisResult:
     if isinstance(dynamic_data, DynamicAnalysisResult):
         return dynamic_data
-    return DynamicAnalysisResult(**dynamic_data)
+
+    # The raw telemetry dict from ebpf_trace has a nested structure that doesn't
+    # match DynamicAnalysisResult's flat fields. Transform it here.
+    d = dict(dynamic_data)
+
+    # Flatten ebpf_telemetry sub-dict into top-level fields
+    ebpf = d.pop("ebpf_telemetry", {})
+    if isinstance(ebpf, dict):
+        if "syscalls" in ebpf and "syscalls" not in d:
+            d["syscalls"] = ebpf["syscalls"]
+        if "network_connections" in ebpf:
+            d.setdefault("ips", [])
+            for conn in ebpf["network_connections"]:
+                if isinstance(conn, dict) and conn.get("ip"):
+                    d["ips"].append(conn["ip"])
+                    d.setdefault("sockets", []).append(
+                        f"{conn['ip']}:{conn.get('port', '?')}/{conn.get('protocol', 'TCP')}"
+                    )
+        if "files_accessed" in ebpf:
+            d.setdefault("file_writes", []).extend(ebpf["files_accessed"])
+
+    # Derive behavioral flags from telemetry signals
+    intercepts = d.pop("llm_frida_intercepts", [])
+    fuzzed = d.pop("fuzzed_intents", [])
+    time_events = d.pop("time_dilution_events", [])
+
+    evasion = d.get("evasion_signals", [])
+    if d.get("time_dilution_bypass"):
+        evasion.append("TIME_DILUTION_BYPASS")
+    if d.get("objection_root_bypass"):
+        evasion.append("ROOT_DETECTION_BYPASS")
+    if d.get("objection_ssl_pinning_bypass"):
+        evasion.append("SSL_PINNING_BYPASS")
+    for evt in time_events:
+        evasion.append(evt)
+    d["evasion_signals"] = evasion
+
+    # Detect C2 connection from Frida intercepts
+    if intercepts:
+        d["observed_c2_connection"] = any(
+            "command-node" in i or "gate.php" in i or "c2" in i.lower()
+            for i in intercepts
+        )
+
+    # Detect root escalation from bypass flags
+    if d.get("objection_root_bypass"):
+        d["observed_root_escalation"] = True
+
+    # Strip keys that DynamicAnalysisResult doesn't accept
+    valid_keys = set(DynamicAnalysisResult.model_fields.keys())
+    filtered = {k: v for k, v in d.items() if k in valid_keys}
+
+    return DynamicAnalysisResult(**filtered)
 
 
 def _dynamic_score(dynamic: DynamicAnalysisResult) -> int:
