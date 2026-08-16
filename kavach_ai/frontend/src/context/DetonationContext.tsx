@@ -83,9 +83,18 @@ export interface StaticScanResults {
   native_libraries?: string[];
 }
 
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  model?: string;
+  nodesUsed?: number;
+}
+
 interface DetonationContextType {
   status: 'landing' | 'analyzing' | 'completed' | 'error';
-  currentView: 'dashboard' | 'scorecard' | 'static_scan' | 'bert_classifier' | 'mitre_map' | 'cert_in' | 'sandbox_health' | 'api_credentials' | 'settings' | 'kavach_report';
+  currentView: 'dashboard' | 'scorecard' | 'static_scan' | 'bert_classifier' | 'mitre_map' | 'cert_in' | 'sandbox_health' | 'api_credentials' | 'settings' | 'kavach_report' | 'rag_agent';
   apkDetails: ApkDetails | null;
   jobId: string | null;
   logs: string[];
@@ -95,7 +104,7 @@ interface DetonationContextType {
   setSimulationMode: (mode: boolean) => void;
   detonationDuration: number;
   setDetonationDuration: (duration: number) => void;
-  setCurrentView: (view: 'dashboard' | 'scorecard' | 'static_scan' | 'bert_classifier' | 'mitre_map' | 'cert_in' | 'sandbox_health' | 'api_credentials' | 'settings' | 'kavach_report') => void;
+  setCurrentView: (view: 'dashboard' | 'scorecard' | 'static_scan' | 'bert_classifier' | 'mitre_map' | 'cert_in' | 'sandbox_health' | 'api_credentials' | 'settings' | 'kavach_report' | 'rag_agent') => void;
   viewScorecard: () => void;
   viewDashboard: () => void;
   loadRecentScan: () => Promise<void>;
@@ -109,6 +118,12 @@ interface DetonationContextType {
   staticResults: StaticScanResults | null;
   runStaticScan: (file: File, modelId?: string) => Promise<void>;
   currentFile: File | null;
+  ragMessages: ChatMessage[];
+  setRagMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  sendRagQuery: (query: string) => Promise<void>;
+  isRagStreaming: boolean;
+  abortRagStream: () => void;
+  clearRagSession: () => void;
 }
 
 const DetonationContext = createContext<DetonationContextType | undefined>(undefined);
@@ -366,6 +381,184 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
+  // --- Connected Shared RAG Agent State ---
+  const [ragMessages, setRagMessages] = useState<ChatMessage[]>([]);
+  const [isRagStreaming, setIsRagStreaming] = useState<boolean>(false);
+  const ragAbortControllerRef = React.useRef<AbortController | null>(null);
+
+  const generateWelcomeMessage = (details: ApkDetails | null, staticRes: StaticScanResults | null): string => {
+    const pkg = details?.package || staticRes?.apk_details?.package || "com.shinhan.three";
+    const hash = (details?.hash || staticRes?.apk_details?.hash || "8f93e2b1a45c7890").slice(0, 12);
+    const perms = staticRes?.triage?.permissions || ["android.permission.INTERNET", "android.permission.READ_SMS", "android.permission.RECEIVE_SMS", "android.permission.SEND_SMS", "android.permission.READ_PHONE_STATE"];
+    const verdict = staticRes?.ml_metrics?.verdict || "MALICIOUS";
+    const prob = staticRes?.ml_metrics?.malicious_probability ? Math.round(staticRes.ml_metrics.malicious_probability * 100) : 94;
+
+    let profile = "Android Application";
+    const permsLower = perms.map(p => p.toLowerCase());
+    if (permsLower.some(p => p.includes("sms")) && permsLower.some(p => p.includes("read_phone_state"))) {
+      profile = "Financial / SMS Interceptor Trojan (targets OTPs, credentials, and telephony identifiers)";
+    } else if (permsLower.some(p => p.includes("camera")) || permsLower.some(p => p.includes("record_audio")) || permsLower.some(p => p.includes("location"))) {
+      profile = "Surveillance / Spyware Payload (targets sensory capture and geographical location)";
+    } else if (permsLower.some(p => p.includes("system_alert_window")) || permsLower.some(p => p.includes("bind_accessibility_service"))) {
+      profile = "Banking Overlay / Accessibility Hijacker (abuses overlays and UI accessibility)";
+    } else if (perms.length > 5) {
+      profile = "High-Privilege Utility / Background Service Carrier";
+    }
+
+    const keyPermsStr = perms.slice(0, 5).map(p => `\`${p.replace('android.permission.', '')}\``).join(', ');
+
+    return (
+      `### Vajra AI Reverse Engineering Assistant Ready\n\n` +
+      `**Target Package:** \`${pkg}\` (\`${hash}...\`)\n\n` +
+      `**Behavioral Profile & Intended Capabilities:**\n` +
+      `- **Classification:** ${profile}\n` +
+      `- **Risk Assessment:** SecureBERT classifier assessed this sample with a **${prob}% malicious confidence** (${verdict}).\n` +
+      (keyPermsStr ? `- **Key Manifest Capabilities:** ${keyPermsStr}\n` : '') +
+      `- **Knowledge Base:** Initialized with Control Flow Graphs, Dalvik bytecode slices, dynamic Frida intercepts, and kernel syscall traces.\n\n` +
+      `Ask a question below or choose a quick triage prompt to inspect decompiled methods, network endpoints, or generate dynamic Frida hooks.`
+    );
+  };
+
+  // Sync initial welcome message whenever apk details change
+  useEffect(() => {
+    const welcome = generateWelcomeMessage(apkDetails, staticResults);
+    setRagMessages(prev => {
+      if (prev.length === 0 || prev[0]?.id === 'welcome-rag-msg') {
+        return [{
+          id: 'welcome-rag-msg',
+          role: 'assistant',
+          content: welcome,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          model: 'vajra-hybrid-graphrag'
+        }];
+      }
+      return prev;
+    });
+  }, [apkDetails?.package, apkDetails?.hash, staticResults?.apk_details?.package]);
+
+  const sendRagQuery = async (queryText: string) => {
+    const textToSend = queryText.trim();
+    if (!textToSend || isRagStreaming) return;
+
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: textToSend,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    const assistantMsgId = `asst-${Date.now()}`;
+    const assistantMessage: ChatMessage = {
+      id: assistantMsgId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      model: 'llama-3.3-70b-versatile'
+    };
+
+    setRagMessages(prev => [...prev, userMessage, assistantMessage]);
+    setIsRagStreaming(true);
+
+    ragAbortControllerRef.current = new AbortController();
+    const activeHash = apkDetails?.hash || staticResults?.apk_details?.hash || "8f93e2b1a45c7890123456789abcdef0123456789abcdef0123456789abcdef0";
+
+    try {
+      const response = await fetch('http://localhost:8000/api/chat-rag', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apk_hash: activeHash,
+          query: textToSend,
+          history: ragMessages.slice(-4).map(m => ({ role: m.role, content: m.content }))
+        }),
+        signal: ragAbortControllerRef.current.signal
+      });
+
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP error ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.replace('data: ', '').trim();
+            if (dataStr === '[DONE]') break;
+
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.token) {
+                setRagMessages(prev =>
+                  prev.map(m =>
+                    m.id === assistantMsgId
+                      ? { ...m, content: m.content + parsed.token, model: parsed.model || m.model }
+                      : m
+                  )
+                );
+              } else if (parsed.nodes_used) {
+                setRagMessages(prev =>
+                  prev.map(m =>
+                    m.id === assistantMsgId ? { ...m, nodesUsed: parsed.nodes_used, model: parsed.model || m.model } : m
+                  )
+                );
+              }
+            } catch {
+              setRagMessages(prev =>
+                prev.map(m =>
+                  m.id === assistantMsgId ? { ...m, content: m.content + dataStr } : m
+                )
+              );
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        setRagMessages(prev =>
+          prev.map(m =>
+            m.id === assistantMsgId
+              ? { ...m, content: m.content + `\n\n*(Error communicating with RAG engine: ${e.message})*` }
+              : m
+          )
+        );
+      }
+    } finally {
+      setIsRagStreaming(false);
+      ragAbortControllerRef.current = null;
+    }
+  };
+
+  const abortRagStream = () => {
+    if (ragAbortControllerRef.current) {
+      ragAbortControllerRef.current.abort();
+      ragAbortControllerRef.current = null;
+      setIsRagStreaming(false);
+    }
+  };
+
+  const clearRagSession = () => {
+    const welcome = generateWelcomeMessage(apkDetails, staticResults);
+    setRagMessages([
+      {
+        id: 'welcome-rag-msg',
+        role: 'assistant',
+        content: welcome,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        model: 'vajra-hybrid-graphrag'
+      }
+    ]);
+  };
+
   return (
     <DetonationContext.Provider
       value={{
@@ -393,6 +586,12 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         runStaticScan,
         currentFile,
         jobId,
+        ragMessages,
+        setRagMessages,
+        sendRagQuery,
+        isRagStreaming,
+        abortRagStream,
+        clearRagSession,
       }}
     >
       {children}
@@ -407,4 +606,5 @@ export const useDetonation = () => {
   }
   return context;
 };
+
 

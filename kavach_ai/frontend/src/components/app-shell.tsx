@@ -2,8 +2,9 @@ import React from 'react';
 import { useDetonation } from '@/context/DetonationContext';
 import { 
   LayoutGrid, Settings, RefreshCw, CreditCard, HelpCircle, BookOpen,
-  FileCode, ShieldAlert, Cpu, FileText, Activity, Award
+  FileCode, ShieldAlert, Cpu, FileText, Activity, Award, Bot
 } from 'lucide-react';
+import { VajraAssistantDrawer } from '@/components/vajra-assistant-drawer';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -79,6 +80,22 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               >
                 <ShieldAlert className="w-3.5 h-3.5" />
                 MITRE ATT&CK Map
+              </button>
+              <button 
+                onClick={() => setCurrentView('rag_agent')}
+                className={`w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
+                  currentView === 'rag_agent'
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Bot className="w-3.5 h-3.5 text-primary" />
+                  <span>RAG Agent</span>
+                </div>
+                <span className="text-[8px] font-bold bg-primary/15 text-primary/80 px-1.5 py-px uppercase tracking-wider">
+                  NEW
+                </span>
               </button>
             </nav>
 
@@ -282,6 +299,9 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
           {children}
         </main>
       </div>
+
+      {/* Floating Persistent Vajra AI Assistant Drawer */}
+      <VajraAssistantDrawer />
     </div>
   );
 };

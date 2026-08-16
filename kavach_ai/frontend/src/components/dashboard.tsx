@@ -12,10 +12,15 @@ import { SandboxHealthView } from '@/components/views/sandbox-health-view';
 import { SettingsView } from '@/components/views/settings-view';
 import { ApiCredentialsView } from '@/components/views/api-credentials-view';
 import { KavachReportView } from '@/components/views/kavach-report-view';
+import { RAGAgentView } from '@/components/views/rag-agent-view';
 import { AlertCircle } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
   const { status, staticScanStatus, currentView, reset, logs } = useDetonation();
+
+  if (currentView === 'rag_agent') {
+    return <RAGAgentView />;
+  }
 
   if (currentView === 'scorecard') {
     return <KavachScorecard />;

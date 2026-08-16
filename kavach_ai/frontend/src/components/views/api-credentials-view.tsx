@@ -3,8 +3,10 @@ import { CreditCard, Eye, EyeOff, Save, Link as LinkIcon, Database } from 'lucid
 
 export const ApiCredentialsView: React.FC = () => {
   const [showGroqKey, setShowGroqKey] = useState(false);
+  const [showOpenRouterKey, setShowOpenRouterKey] = useState(false);
   const [showVtKey, setShowVtKey] = useState(false);
   const [groqKey, setGroqKey] = useState('gsk_**************************************');
+  const [openRouterKey, setOpenRouterKey] = useState('sk-or-v1-********************************');
   const [vtKey, setVtKey] = useState('');
 
   return (
@@ -14,7 +16,7 @@ export const ApiCredentialsView: React.FC = () => {
           <CreditCard className="w-5 h-5 text-primary" />
           API Credentials & Integrations
         </h2>
-        <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all">
+        <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all cursor-pointer">
           <Save className="w-4 h-4" /> Save Credentials
         </button>
       </div>
@@ -26,11 +28,36 @@ export const ApiCredentialsView: React.FC = () => {
           <h3 className="text-sm font-bold uppercase tracking-widest flex items-center gap-2 text-muted-foreground">
             <LinkIcon className="w-4 h-4" /> External Services
           </h3>
+
+          <div className="p-6 border border-border bg-card/30 space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-foreground flex items-center justify-between">
+                <span>OpenRouter API Key (Qwen 2.5 Coder 32B)</span>
+                <span className="text-xs text-emerald-500 font-medium bg-emerald-500/10 px-2 py-0.5 border border-emerald-500/20">Configured</span>
+              </label>
+              <div className="relative">
+                <input 
+                  type={showOpenRouterKey ? 'text' : 'password'}
+                  value={openRouterKey}
+                  onChange={(e) => setOpenRouterKey(e.target.value)}
+                  className="w-full bg-black/50 border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary font-mono"
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowOpenRouterKey(!showOpenRouterKey)}
+                  className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  {showOpenRouterKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">Used by Vajra RAG Agent for Qwen 2.5 Coder 32B reverse engineering and Frida hook synthesis.</p>
+            </div>
+          </div>
           
           <div className="p-6 border border-border bg-card/30 space-y-4">
             <div className="space-y-2">
               <label className="text-sm font-semibold text-foreground flex items-center justify-between">
-                <span>Groq API Key (LLaMA-3 Reporting)</span>
+                <span>Groq API Key (LLaMA-3 / Fallback)</span>
                 <span className="text-xs text-emerald-500 font-medium bg-emerald-500/10 px-2 py-0.5 border border-emerald-500/20">Configured</span>
               </label>
               <div className="relative">
@@ -43,12 +70,12 @@ export const ApiCredentialsView: React.FC = () => {
                 <button 
                   type="button"
                   onClick={() => setShowGroqKey(!showGroqKey)}
-                  className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                  className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer"
                 >
                   {showGroqKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground">Used for generating automated human-readable forensic reports.</p>
+              <p className="text-xs text-muted-foreground">Used for generating automated human-readable forensic reports and fallback triage.</p>
             </div>
           </div>
 

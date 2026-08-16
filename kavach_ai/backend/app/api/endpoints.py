@@ -7,6 +7,7 @@ import socket
 import requests
 import asyncio
 import logging
+from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status, Query
 from fastapi.responses import FileResponse, PlainTextResponse
@@ -321,3 +322,72 @@ async def get_threat_intel(host: str = Query(..., description="IP or domain to c
         "google_maps_url": maps_url,
         "threat_details": " / ".join(threat_info) if threat_info else "No matches in active malware blacklists."
     }
+
+
+# ==========================================================
+# VAJRA HYBRID GRAPHRAG ENDPOINTS
+# ==========================================================
+
+from pydantic import BaseModel
+from fastapi.responses import StreamingResponse
+from kavach_ai.backend.pipeline.stage6_synthesis.rag_engine import (
+    HybridGraphRAG,
+    generate_chat_rag_stream,
+)
+
+class ChatRAGRequest(BaseModel):
+    apk_hash: str
+    query: str
+    history: Optional[List[Dict[str, str]]] = None
+
+class SynthesizeHookRequest(BaseModel):
+    apk_hash: Optional[str] = None
+    target_method: Optional[str] = None
+    target_class: Optional[str] = None
+    package_name: Optional[str] = "com.target.malware"
+
+@router.post("/api/chat-rag")
+async def chat_rag(req: ChatRAGRequest):
+    if not req.apk_hash or not req.query:
+        raise HTTPException(status_code=400, detail="apk_hash and query are required.")
+
+    sse_headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+    return StreamingResponse(
+        generate_chat_rag_stream(req.apk_hash, req.query, req.history),
+        media_type="text/event-stream",
+        headers=sse_headers,
+    )
+
+@router.get("/api/rag/status/{apk_hash}")
+async def get_rag_status(apk_hash: str):
+    rag = HybridGraphRAG(apk_hash)
+    return {"status": "success", "data": rag.get_status()}
+
+@router.post("/api/rag/synthesize-hook")
+async def synthesize_hook_on_the_fly(req: SynthesizeHookRequest):
+    try:
+        from kavach_ai.backend.pipeline.stage4_dynamic.llm_frida_synthesizer import LLMFridaSynthesizer
+        synthesizer = LLMFridaSynthesizer()
+        sinks = []
+        if req.target_method:
+            sinks.append({"source_method": req.target_method, "slice_text": f"Target hook on {req.target_method}"})
+        elif req.target_class:
+            sinks.append({"source_method": f"{req.target_class}->targetMethod", "slice_text": f"Target class {req.target_class}"})
+
+        script = synthesizer.generate_hooks_from_sinks(
+            sinks=sinks,
+            package_name=req.package_name or "com.target.malware"
+        )
+        return {
+            "status": "success",
+            "package_name": req.package_name,
+            "script": script,
+            "engine": "Vajra-LLMFrida (Groq qwen2.5-coder-32b-instruct)"
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e), "script": f"// Error generating hook: {str(e)}"}
+

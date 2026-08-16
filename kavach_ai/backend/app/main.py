@@ -1,5 +1,14 @@
 import os
 import sys
+
+# Ensure root and package directories are in sys.path immediately
+_this_dir = os.path.dirname(os.path.abspath(__file__))
+_kavach_ai_dir = os.path.dirname(os.path.dirname(_this_dir))
+_root_dir = os.path.dirname(_kavach_ai_dir)
+for p in [_root_dir, _kavach_ai_dir]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 import json
 import tempfile
 import logging
@@ -14,7 +23,7 @@ from pydantic import BaseModel
 
 # Initialize environment variables
 load_dotenv()
-load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), '.env'))
+load_dotenv(os.path.join(_root_dir, '.env'))
 
 from fastapi import FastAPI, UploadFile, File, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,13 +35,9 @@ from kavach_ai.backend.app.db.models import APK, CertInReport, SmaliSlice
 from kavach_ai.backend.app.db.session import engine
 from kavach_ai.backend.pipeline.stage6_synthesis.merge import merge_telemetry
 from kavach_ai.backend.pipeline.stage6_synthesis.report_gen import generate_report_groq
-
-# Ensure backend modules can be imported
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 from kavach_ai.backend.app.api.endpoints import router
 from kavach_ai.backend.app.db.session import init_db
-from backend.pipeline.stage4_dynamic import run_dynamic_analysis_pipeline
+from kavach_ai.backend.pipeline.stage4_dynamic import run_dynamic_analysis_pipeline
 
 
 @asynccontextmanager
@@ -242,6 +247,17 @@ async def static_scan_stream(
                     await session.commit()
             except Exception as re:
                 print(f"[Static Report Error] Failed to generate: {re}")
+                static_report = {}
+
+            # Progressive RAG Auto-Indexing: Index static slices & initial report
+            try:
+                from kavach_ai.backend.pipeline.stage6_synthesis.rag_engine import HybridGraphRAG
+                rag = HybridGraphRAG(apk_hash)
+                rag.index_static_findings(final_payload)
+                if static_report:
+                    rag.enrich_forensic_report(static_report)
+            except Exception as rage:
+                print(f"[RAG Indexing Warning] Static indexing skipped: {rage}")
 
             yield f"data: {json.dumps({'type': 'result', 'job_id': job_id, 'apk_hash': apk_hash, 'static_results': final_payload})}\n\n"
 
@@ -610,6 +626,16 @@ async def detonate_stream(
                     db_cert.mitre_attack_json = report
                     session.add(db_cert)
                 await session.commit()
+
+            # Progressive RAG Auto-Indexing: Enrich with dynamic Frida intercepts & eBPF syscalls
+            try:
+                from kavach_ai.backend.pipeline.stage6_synthesis.rag_engine import HybridGraphRAG
+                rag = HybridGraphRAG(apk_hash)
+                rag.enrich_dynamic_telemetry(telemetry)
+                if report:
+                    rag.enrich_forensic_report(report)
+            except Exception as rage:
+                print(f"[RAG Indexing Warning] Dynamic enrichment skipped: {rage}")
 
             # 3. Yield final results
             yield f"data: {json.dumps({'type': 'result', 'job_id': job_id, 'apk_hash': apk_hash, 'telemetry': telemetry})}\n\n"
