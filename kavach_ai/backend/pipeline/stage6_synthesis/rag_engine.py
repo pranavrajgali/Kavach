@@ -684,7 +684,8 @@ async def generate_chat_rag_stream(apk_hash: str, query: str, history: Optional[
                 if "modelnotfound" in err_msg.lower() or "does not exist" in err_msg.lower():
                     continue # Try next candidate model on Groq
                 else:
-                    yield f"data: {json.dumps({'token': f'*(Inference Notice: {err_msg}. Generating local forensic synthesis...)*\n\n'})}\n\n"
+                    notice_msg = f"*(Inference Notice: {err_msg}. Generating local forensic synthesis...)*\n\n"
+                    yield f"data: {json.dumps({'token': notice_msg})}\n\n"
                     break
 
     # 4. Fallback local deterministic synthesis
