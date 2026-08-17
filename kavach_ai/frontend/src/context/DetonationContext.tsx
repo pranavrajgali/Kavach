@@ -128,6 +128,31 @@ interface DetonationContextType {
 
 const DetonationContext = createContext<DetonationContextType | undefined>(undefined);
 
+function consumeSseBuffer(
+  buffer: string,
+  onEvent: (data: any) => void
+): string {
+  const normalized = buffer.replace(/\r\n/g, '\n');
+  const parts = normalized.split('\n\n');
+  const leftover = parts.pop() || '';
+
+  for (const part of parts) {
+    const lines = part.split('\n');
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line.startsWith('data: ')) continue;
+      try {
+        const payload = JSON.parse(line.slice(6));
+        onEvent(payload);
+      } catch (err) {
+        console.error('Failed to parse SSE payload:', err, line);
+      }
+    }
+  }
+
+  return leftover;
+}
+
 export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [status, setStatus] = useState<DetonationContextType['status']>('landing');
   const [currentView, setCurrentView] = useState<DetonationContextType['currentView']>('static_scan');
@@ -158,25 +183,6 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [selectedModelId, setSelectedModelId] = useState<string>('securebert-full-weighted');
   const [staticScanStatus, setStaticScanStatus] = useState<'landing' | 'analyzing' | 'completed' | 'error'>('landing');
   const [staticResults, setStaticResults] = useState<StaticScanResults | null>(null);
-
-  const consumeSseBuffer = (rawBuffer: string, onEvent: (data: any) => void) => {
-    const normalized = rawBuffer.replace(/\r\n/g, '\n');
-    const parts = normalized.split('\n\n');
-    const remainder = parts.pop() || '';
-    for (const part of parts) {
-      const lines = part.split('\n');
-      for (const rawLine of lines) {
-        const line = rawLine.trim();
-        if (!line.startsWith('data: ')) continue;
-        try {
-          onEvent(JSON.parse(line.slice(6)));
-        } catch (err) {
-          console.error('Failed to parse SSE payload:', err, line);
-        }
-      }
-    }
-    return remainder;
-  };
 
   // Fetch available models and live ADB status from backend on mount
   useEffect(() => {
@@ -336,66 +342,31 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       const decoder = new TextDecoder();
       let rawBuffer = '';
 
+      const applyStaticEvent = (data: any) => {
+        if (data.type === 'log') {
+          setLogs((prev) => [...prev, data.message]);
+        } else if (data.type === 'metadata') {
+          if (data.job_id) setJobId(data.job_id);
+        } else if (data.type === 'result') {
+          setStaticResults(data.static_results);
+          if (data.static_results?.apk_details) {
+            setApkDetails(data.static_results.apk_details);
+          }
+          setStaticScanStatus('completed');
+        } else if (data.type === 'error') {
+          setLogs((prev) => [...prev, `[Fatal] ${data.message}`]);
+          setStaticScanStatus('error');
+        }
+      };
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
 
         rawBuffer += decoder.decode(value, { stream: true });
-        const normalized = rawBuffer.replace(/\r\n/g, '\n');
-        const parts = normalized.split('\n\n');
-        
-        rawBuffer = parts.pop() || '';
-
-        for (const part of parts) {
-          const lines = part.split('\n');
-          for (const rawLine of lines) {
-            const line = rawLine.trim();
-            if (!line.startsWith('data: ')) continue;
-            
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (data.type === 'log') {
-                setLogs((prev) => [...prev, data.message]);
-              } else if (data.type === 'metadata') {
-                if (data.job_id) setJobId(data.job_id);
-              } else if (data.type === 'result') {
-                setStaticResults(data.static_results);
-                if (data.static_results?.apk_details) {
-                  setApkDetails(data.static_results.apk_details);
-                }
-                setStaticScanStatus('completed');
-              } else if (data.type === 'error') {
-                setLogs((prev) => [...prev, `[Fatal] ${data.message}`]);
-                setStaticScanStatus('error');
-              }
-            } catch (err) {
-              console.error('Failed to parse static scan SSE payload:', err, line);
-            }
-          }
-        }
+        rawBuffer = consumeSseBuffer(rawBuffer, applyStaticEvent);
       }
-
-      // Process any leftover string in rawBuffer when stream completes
-      if (rawBuffer.trim()) {
-        const lines = rawBuffer.replace(/\r\n/g, '\n').split('\n');
-        for (const rawLine of lines) {
-          const line = rawLine.trim();
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.type === 'result' && data.static_results) {
-              setStaticResults(data.static_results);
-              if (data.static_results?.apk_details) {
-                setApkDetails(data.static_results.apk_details);
-              }
-              setStaticScanStatus('completed');
-            }
-          } catch (e) {
-            // ignore trailing incomplete chunk
-          }
-        }
-      }
+      consumeSseBuffer(rawBuffer + '\n\n', applyStaticEvent);
     } catch (err: any) {
       console.error('Static scan connection error:', err);
       setLogs((prev) => [...prev, `[Connection Error] Failed to execute static scan: ${err.message}`]);
