@@ -426,14 +426,29 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     } catch {}
   }, [ragMessages]);
 
-  const generateWelcomeMessage = (details: ApkDetails | null, staticRes: StaticScanResults | null): string => {
-    const pkg = details?.package || staticRes?.apk_details?.package || "com.shinhan.three";
-    const hash = (details?.hash || staticRes?.apk_details?.hash || "8f93e2b1a45c7890").slice(0, 12);
-    const perms = staticRes?.triage?.permissions || ["android.permission.INTERNET", "android.permission.READ_SMS", "android.permission.RECEIVE_SMS", "android.permission.SEND_SMS", "android.permission.READ_PHONE_STATE"];
-    const verdict = staticRes?.ml_metrics?.verdict || "MALICIOUS";
-    const prob = staticRes?.ml_metrics?.malicious_probability ? Math.round(staticRes.ml_metrics.malicious_probability * 100) : 94;
+  const generateWelcomeMessage = (
+    details: ApkDetails | null, 
+    staticRes: StaticScanResults | null,
+    scanStatus: string
+  ): string => {
+    const pkg = details?.package || staticRes?.apk_details?.package || "Resolving identifier...";
+    const hash = (details?.hash || staticRes?.apk_details?.hash || "").slice(0, 12);
 
-    let profile = "Android Application";
+    if (scanStatus === 'analyzing' || !staticRes) {
+      return (
+        `### Vajra AI Reverse Engineering Assistant Ready\n\n` +
+        `**Target Package:** \`${pkg}\` ${hash ? `(\`${hash}...\`)` : ''}\n\n` +
+        `**Analysis State:** 🔄 Bytecode extraction & static security triage in progress...\n\n` +
+        `- **Knowledge Base Status:** Standby — indexing Dalvik bytecode slices, dangerous capability combinations, and system call profiles.\n\n` +
+        `Once decompilation completes, ask Vajra to trace suspicious methods, analyze permissions, explain ATS/banking fraud flows, or generate custom Frida bypass hooks.`
+      );
+    }
+
+    const perms = staticRes?.triage?.permissions || [];
+    const verdict = staticRes?.ml_metrics?.verdict || "UNKNOWN";
+    const prob = staticRes?.ml_metrics?.malicious_probability ? Math.round(staticRes.ml_metrics.malicious_probability * 100) : 0;
+
+    let profile = "Standard Android Application";
     const permsLower = perms.map(p => p.toLowerCase());
     if (permsLower.some(p => p.includes("sms")) && permsLower.some(p => p.includes("read_phone_state"))) {
       profile = "Financial / SMS Interceptor Trojan (targets OTPs, credentials, and telephony identifiers)";
@@ -449,7 +464,7 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     return (
       `### Vajra AI Reverse Engineering Assistant Ready\n\n` +
-      `**Target Package:** \`${pkg}\` (\`${hash}...\`)\n\n` +
+      `**Target Package:** \`${pkg}\` ${hash ? `(\`${hash}...\`)` : ''}\n\n` +
       `**Behavioral Profile & Intended Capabilities:**\n` +
       `- **Classification:** ${profile}\n` +
       `- **Risk Assessment:** SecureBERT classifier assessed this sample with a **${prob}% malicious confidence** (${verdict}).\n` +
@@ -459,9 +474,9 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     );
   };
 
-  // Sync initial welcome message whenever apk details change
+  // Sync initial welcome message whenever apk details or static scan results change
   useEffect(() => {
-    const welcome = generateWelcomeMessage(apkDetails, staticResults);
+    const welcome = generateWelcomeMessage(apkDetails, staticResults, staticScanStatus);
     setRagMessages(prev => {
       if (prev.length === 0 || prev[0]?.id === 'welcome-rag-msg') {
         return [{
@@ -474,7 +489,7 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
       return prev;
     });
-  }, [apkDetails?.package, apkDetails?.hash, staticResults?.apk_details?.package]);
+  }, [apkDetails?.package, apkDetails?.hash, staticResults?.apk_details?.package, staticResults?.ml_metrics?.verdict, staticScanStatus]);
 
   const sendRagQuery = async (queryText: string) => {
     const textToSend = queryText.trim();
@@ -590,7 +605,7 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     try {
       sessionStorage.removeItem('vajra_rag_messages');
     } catch {}
-    const welcome = generateWelcomeMessage(apkDetails, staticResults);
+    const welcome = generateWelcomeMessage(apkDetails, staticResults, staticScanStatus);
     setRagMessages([
       {
         id: 'welcome-rag-msg',
