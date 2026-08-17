@@ -15,6 +15,8 @@ except ImportError:
 
 logger = logging.getLogger("KavachDetonator")
 
+import httpx
+
 class LLMFridaSynthesizer:
     """
     Kavach LLMFrida Synthesizer:
@@ -23,13 +25,14 @@ class LLMFridaSynthesizer:
     and dynamically synthesizes production-grade Frida JavaScript interceptors.
     """
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "qwen2.5-coder-32b-instruct"):
-        self.api_key = api_key or os.environ.get("GROQ_API_KEY")
+    def __init__(self, api_key: Optional[str] = None, model: str = "llama-3.3-70b-versatile"):
+        self.groq_api_key = api_key or os.environ.get("GROQ_API_KEY")
+        self.openrouter_api_key = os.environ.get("OPENROUTER_API_KEY")
         self.model = model
         self.client = None
-        if self.api_key and Groq is not None:
+        if self.groq_api_key and Groq is not None:
             try:
-                self.client = Groq(api_key=self.api_key)
+                self.client = Groq(api_key=self.groq_api_key)
             except Exception as e:
                 logger.warning(f"[LLMFrida] Failed to initialize Groq client: {e}")
 
@@ -61,52 +64,85 @@ class LLMFridaSynthesizer:
                 }
             ]
 
-        if self.client:
+        prompt = self._build_prompt(sinks, package_name)
+        system_msg = (
+            "You are an elite reverse engineer and Frida script synthesizer for Android malware analysis. "
+            "Your goal is to write clean, crash-resilient Frida JavaScript hooks for Android ART Dalvik runtimes. "
+            "Requirements:\n"
+            "1. Wrap all hooks strictly inside Java.perform(function() { ... }).\n"
+            "2. Enclose every hook implementation in try/catch blocks so one failing hook never crashes the process.\n"
+            "3. Use console.log('[LLM-Frida-Hook] ...') to log method arguments, return values, and decrypted strings.\n"
+            "4. Output ONLY valid raw JavaScript code without markdown code blocks, explanations, or commentary."
+        )
+
+        # 1. Try OpenRouter (Qwen 2.5 Coder 32B)
+        if self.openrouter_api_key:
             try:
-                logger.info(f"[LLMFrida] Prompting Groq ({self.model}) for {len(sinks)} static sinks...")
-                prompt = self._build_prompt(sinks, package_name)
-                
-                completion = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                "You are an elite reverse engineer and Frida script synthesizer for Android malware analysis. "
-                                "Your goal is to write clean, crash-resilient Frida JavaScript hooks for Android ART Dalvik runtimes. "
-                                "Requirements:\n"
-                                "1. Wrap all hooks strictly inside Java.perform(function() { ... }).\n"
-                                "2. Enclose every hook implementation in try/catch blocks so one failing hook never crashes the process.\n"
-                                "3. Use console.log('[LLM-Frida-Hook] ...') to log method arguments, return values, and decrypted strings.\n"
-                                "4. Output ONLY valid raw JavaScript code without markdown code blocks, explanations, or commentary."
-                            )
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt
-                        }
-                    ],
-                    temperature=0.1,
-                    max_tokens=1500
+                logger.info(f"[LLMFrida] Prompting OpenRouter (qwen/qwen-2.5-coder-32b-instruct) for {len(sinks)} static sinks...")
+                resp = httpx.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.openrouter_api_key}",
+                        "HTTP-Referer": "https://kavach.ai",
+                        "X-Title": "Kavach AI",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "qwen/qwen-2.5-coder-32b-instruct",
+                        "messages": [
+                            {"role": "system", "content": system_msg},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.1,
+                        "max_tokens": 1500
+                    },
+                    timeout=25.0
                 )
-                
-                content = completion.choices[0].message.content.strip()
-                # Clean up any accidental markdown formatting
-                if content.startswith("```"):
-                    lines = content.splitlines()
-                    if lines[0].startswith("```"):
-                        lines = lines[1:]
-                    if lines and lines[-1].strip() == "```":
-                        lines = lines[:-1]
-                    content = "\n".join(lines).strip()
-                    
-                if "Java.perform" in content:
-                    logger.info("[LLMFrida] Successfully synthesized custom AI Frida hooks via Groq Cloud.")
-                    return content
-                else:
-                    logger.warning("[LLMFrida] Synthesized code lacked Java.perform wrapper. Falling back to robust templates.")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+                    if content.startswith("```"):
+                        lines = content.splitlines()
+                        if lines[0].startswith("```"):
+                            lines = lines[1:]
+                        if lines and lines[-1].strip() == "```":
+                            lines = lines[:-1]
+                        content = "\n".join(lines).strip()
+                    if "Java.perform" in content:
+                        logger.info("[LLMFrida] Successfully synthesized custom AI Frida hooks via OpenRouter Qwen Coder.")
+                        return content
             except Exception as e:
-                logger.warning(f"[LLMFrida] Groq API hook generation error: {e}. Utilizing deterministic template fallback.")
+                logger.warning(f"[LLMFrida] OpenRouter hook generation notice: {e}. Falling back to Groq.")
+
+        # 2. Try Groq (llama-3.3-70b-versatile)
+        if self.client:
+            candidate_groq_models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
+            for g_model in candidate_groq_models:
+                try:
+                    logger.info(f"[LLMFrida] Prompting Groq ({g_model}) for {len(sinks)} static sinks...")
+                    completion = self.client.chat.completions.create(
+                        model=g_model,
+                        messages=[
+                            {"role": "system", "content": system_msg},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.1,
+                        max_tokens=1500
+                    )
+                    content = completion.choices[0].message.content.strip()
+                    if content.startswith("```"):
+                        lines = content.splitlines()
+                        if lines[0].startswith("```"):
+                            lines = lines[1:]
+                        if lines and lines[-1].strip() == "```":
+                            lines = lines[:-1]
+                        content = "\n".join(lines).strip()
+                    if "Java.perform" in content:
+                        logger.info(f"[LLMFrida] Successfully synthesized custom AI Frida hooks via Groq ({g_model}).")
+                        return content
+                except Exception as e:
+                    logger.warning(f"[LLMFrida] Groq ({g_model}) notice: {e}.")
+                    continue
 
         return self._fallback_hooks(sinks, package_name)
 

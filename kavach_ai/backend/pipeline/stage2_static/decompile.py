@@ -473,14 +473,22 @@ def prepare_workspace(
                     "WORKSPACE_NOT_DIRECTORY",
                     f"Existing workspace target is not a directory: {target}",
                 )
-            shutil.rmtree(target)
+            for _ in range(3):
+                try:
+                    shutil.rmtree(target, ignore_errors=False)
+                    break
+                except OSError:
+                    import time
+                    time.sleep(0.1)
+            if target.exists():
+                shutil.rmtree(target, ignore_errors=True)
 
         apktool_path = target / "apktool"
         jadx_path = target / "jadx"
         raw_dex_path = target / "raw_dex"
         native_path = target / "native"
         for directory in (apktool_path, jadx_path, raw_dex_path, native_path):
-            directory.mkdir(parents=True, exist_ok=False)
+            directory.mkdir(parents=True, exist_ok=True)
     except ExtractionError:
         raise
     except OSError as exc:

@@ -46,7 +46,9 @@ def test_detonation_orchestrator_initialization():
     assert hasattr(orchestrator, "fuzzed_intents")
     assert hasattr(orchestrator, "synthesized_hooks_code")
 
-def test_dynamic_pipeline_simulation_mode():
+def test_dynamic_pipeline_simulation_mode(monkeypatch):
+    from kavach_ai.backend.pipeline.stage4_dynamic.detonate import DetonationOrchestrator
+    monkeypatch.setattr(DetonationOrchestrator, "_check_device_connected", lambda self: False)
     telemetry = run_dynamic_analysis_pipeline(
         apk_path="mock_test.apk",
         package_name="com.bank.trojan",

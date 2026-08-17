@@ -109,10 +109,10 @@ class DetonationOrchestrator:
         
         return "arm64-v8a"
 
-    def run_command(self, cmd, log_error=True):
+    def run_command(self, cmd, log_error=True, timeout=30):
         logger.info(f"Executing: {' '.join(cmd)}")
         try:
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15)
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout)
             if res.returncode != 0:
                 if log_error:
                     logger.error(f"Command failed with code {res.returncode}: {res.stderr}")
@@ -326,7 +326,7 @@ class DetonationOrchestrator:
         
         for attempt in range(3):
             logger.info(f"Attempting to install APK (attempt {attempt + 1}/3)...")
-            success, stdout, stderr = self.run_command([self.adb_path, "install", "-r", "-g", apk_path])
+            success, stdout, stderr = self.run_command([self.adb_path, "install", "-r", "-g", "-d", apk_path], timeout=90)
             if success:
                 logger.info("APK installed successfully.")
                 return True
