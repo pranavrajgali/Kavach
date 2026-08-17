@@ -15,7 +15,7 @@ export interface FindingItem {
 }
 
 export const KavachScorecard: React.FC = () => {
-  const { telemetry, staticResults, apkDetails, viewDashboard, simulationMode } = useDetonation();
+  const { telemetry, staticResults, apkDetails, viewDashboard } = useDetonation();
   const [filterSeverity, setFilterSeverity] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -217,7 +217,7 @@ export const KavachScorecard: React.FC = () => {
       privacyRiskLevel: finalPrivacyRiskLevel,
       findings: fList
     };
-  }, [telemetry, staticResults, simulationMode]);
+  }, [telemetry, staticResults]);
 
   const filteredFindings = useMemo(() => {
     return findings.filter(f => {

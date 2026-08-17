@@ -460,7 +460,7 @@ export const DetonationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       }
       return prev;
     });
-  }, [apkDetails?.package, apkDetails?.hash, staticResults?.apk_details?.package, staticResults?.ml_metrics?.verdict, staticScanStatus]);
+  }, [apkDetails, staticResults, staticScanStatus]);
 
   const sendRagQuery = async (queryText: string) => {
     const textToSend = queryText.trim();

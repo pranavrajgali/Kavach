@@ -35,17 +35,23 @@ export const ReportView: React.FC = () => {
   const executionMode = telemetry?.execution_mode || 'SIMULATION_FALLBACK';
 
   useEffect(() => {
+    const conns = telemetry?.ebpf_telemetry?.network_connections || [];
+    const dns = telemetry?.ebpf_telemetry?.dns_resolutions || [];
     const hostsToQuery: string[] = [];
-    networkConns.forEach((c) => {
+
+    conns.forEach((c) => {
       if (c.ip) hostsToQuery.push(c.ip);
     });
-    dnsResolutions.forEach((d) => {
+    dns.forEach((d) => {
       if (d.domain) hostsToQuery.push(d.domain);
     });
 
     const uniqueHosts = Array.from(new Set(hostsToQuery));
     uniqueHosts.forEach(async (host) => {
-      if (threatIntel[host]) return;
+      setThreatIntel((prev) => {
+        if (prev[host]) return prev;
+        return prev;
+      });
       try {
         const res = await fetch(`/api/threat-intel?host=${encodeURIComponent(host)}`);
         if (res.ok) {
@@ -56,7 +62,7 @@ export const ReportView: React.FC = () => {
         console.error("Failed to fetch threat intel for", host, e);
       }
     });
-  }, [telemetry, networkConns, dnsResolutions]);
+  }, [telemetry]);
 
   const getEventTime = (patterns: string[], defaultTime: string) => {
     const idx = logs.findIndex((log) =>

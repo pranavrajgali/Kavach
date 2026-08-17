@@ -7,9 +7,9 @@ interface MarkdownRendererProps {
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className = '' }) => {
-  if (!content) return null;
-
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  if (!content) return null;
 
   const handleCopyCode = (code: string, idx: number) => {
     navigator.clipboard.writeText(code);

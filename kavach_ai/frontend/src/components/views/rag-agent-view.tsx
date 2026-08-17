@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDetonation } from '@/context/DetonationContext';
 import { 
   Bot, Sparkles, Send, Square, RotateCcw, Copy, Check, 
@@ -44,7 +44,7 @@ export const RAGAgentView: React.FC = () => {
   const activePackage = apkDetails?.package || staticResults?.apk_details?.package || "com.shinhan.three";
 
   // Fetch live RAG indexing stats
-  const fetchRagStatus = async () => {
+  const fetchRagStatus = useCallback(async () => {
     try {
       const res = await fetch(`http://localhost:8000/api/rag/status/${activeApkHash}`);
       if (res.ok) {
@@ -56,11 +56,11 @@ export const RAGAgentView: React.FC = () => {
     } catch (e) {
       console.warn("Could not fetch RAG status:", e);
     }
-  };
+  }, [activeApkHash]);
 
   useEffect(() => {
     fetchRagStatus();
-  }, [activeApkHash]);
+  }, [fetchRagStatus]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
