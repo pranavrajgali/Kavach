@@ -1,0 +1,15 @@
+# Candidate only. Keep disabled until real V2 corpus measurements are reviewed.
+schema_version: mil-v2-candidate1
+enabled: false
+embedding_dim: 768
+attention_dim: 128
+num_labels: 2
+# mean | max | top_k | attention; select only after the real V2 audit.
+aggregation: mean
+top_k: 3
+# Embeddings are supplied through ModelViewEmbedder. SecureBERT loading and
+# checkpoint choice remain outside the dataset/model contract.
+embedding_backend: securebert
+embedding_checkpoint: training/models/SecureBERT2.0-base
+embedding_max_length: 1024
+embedding_batch_size: 16

@@ -1,0 +1,15 @@
+<android.database.Cursor: java.lang.String getString(int)> -> _SOURCE_
+<android.database.Cursor: byte[] getBlob(int)> -> _SOURCE_
+<android.database.Cursor: int getInt(int)> -> _SOURCE_
+<java.io.OutputStream: void write(byte[])> -> _SINK_
+<java.io.OutputStream: void write(byte[],int,int)> -> _SINK_
+<java.io.Writer: void write(java.lang.String)> -> _SINK_
+<java.io.PrintWriter: void write(java.lang.String)> -> _SINK_
+<android.telephony.SmsManager: void sendTextMessage(java.lang.String,java.lang.String,java.lang.String,android.app.PendingIntent,android.app.PendingIntent)> -> _SINK_
+<android.content.Context: void sendBroadcast(android.content.Intent)> -> _SINK_
+<android.content.Context: void sendBroadcast(android.content.Intent,java.lang.String)> -> _SINK_
+<android.content.Context: void sendOrderedBroadcast(android.content.Intent,java.lang.String)> -> _SINK_
+<android.util.Log: int d(java.lang.String,java.lang.String)> -> _SINK_
+<android.util.Log: int e(java.lang.String,java.lang.String)> -> _SINK_
+<android.util.Log: int i(java.lang.String,java.lang.String)> -> _SINK_
+<android.util.Log: int w(java.lang.String,java.lang.String)> -> _SINK_

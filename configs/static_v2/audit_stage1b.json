@@ -1,0 +1,7 @@
+{
+  "enabled": false,
+  "max_near_duplicate_artifacts": 5000,
+  "near_duplicate_jaccard": 0.85,
+  "near_duplicates_enabled": false,
+  "schema_version": "stage1b-audit-config-v1"
+}

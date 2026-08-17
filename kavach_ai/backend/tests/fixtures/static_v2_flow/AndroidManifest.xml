@@ -1,0 +1,17 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="ai.kavach.fixture">
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity android:name=".FlowActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".AsyncFlowActivity" android:exported="false" />
+        <activity android:name=".StreamEndpointActivity" android:exported="false" />
+        <activity android:name="com.android.system.PersistenceActivity" android:exported="false" />
+    </application>
+</manifest>

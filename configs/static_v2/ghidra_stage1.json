@@ -1,0 +1,11 @@
+{
+  "evidence_level": "E2",
+  "max_functions": 32,
+  "decompile_timeout_seconds": 30,
+  "analysis_timeout_seconds": 600,
+  "seed_policy": "jni_exports_jni_onload_registernatives_then_bounded_callees",
+  "raw_pcode_policy": "content_addressed_debug_only",
+  "semantic_identity": "normalized_decompiled_code_calls_imports_strings_jni_mapping",
+  "volatile_addresses_in_modelview": false
+}
+

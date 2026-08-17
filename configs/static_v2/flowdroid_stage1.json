@@ -1,0 +1,13 @@
+{
+  "flowdroid_version": "2.15.1",
+  "soot_version": "4.7.1",
+  "jdk_major": 17,
+  "path_reconstruction": "Fast",
+  "exceptional_cfg": true,
+  "control_dependence": "postdominator-direct-v1",
+  "data_timeout_seconds": 300,
+  "callback_timeout_seconds": 120,
+  "path_timeout_seconds": 120,
+  "manifest_policy": "context_only",
+  "configuration_scope": "representative_subset_only"
+}

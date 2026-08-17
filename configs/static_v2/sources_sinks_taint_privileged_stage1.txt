@@ -1,0 +1,9 @@
+<java.net.URLConnection: java.io.InputStream getInputStream()> -> _SOURCE_
+<java.net.Socket: java.io.InputStream getInputStream()> -> _SOURCE_
+<java.lang.Runtime: java.lang.Process exec(java.lang.String)> -> _SINK_
+<java.lang.Runtime: java.lang.Process exec(java.lang.String[])> -> _SINK_
+<java.lang.ProcessBuilder: java.lang.Process start()> -> _SINK_
+<dalvik.system.DexClassLoader: void <init>(java.lang.String,java.lang.String,java.lang.String,java.lang.ClassLoader)> -> _SINK_
+<dalvik.system.InMemoryDexClassLoader: void <init>(java.nio.ByteBuffer,java.lang.ClassLoader)> -> _SINK_
+<dalvik.system.DexFile: dalvik.system.DexFile loadDex(java.lang.String,java.lang.String,int)> -> _SINK_
+<android.content.pm.PackageInstaller$Session: void commit(android.content.IntentSender)> -> _SINK_

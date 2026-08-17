@@ -1,0 +1,31 @@
+{
+  "scope": "stage1_review_only",
+  "selection": [
+    {
+      "apk_sha256": "0f74a195ee9479c05e912af74b69c565a06c68e23041fdfb85c0c3f3aa9c4cb8",
+      "label": "Benign",
+      "reason": "small benign baseline"
+    },
+    {
+      "apk_sha256": "3f967216c4a0ecd3e157730d2c0b4a55f4e95a4b7789439d2ac70c6c08ead45f",
+      "label": "Malicious",
+      "reason": "small V1 SMS behavior and truncation case"
+    },
+    {
+      "apk_sha256": "6fa58f92c9c2c4361b603b2e2281a32a3d6008c012e2a4164d329c6d9269178c",
+      "label": "Malicious",
+      "reason": "small V1 execution plus native-loading case"
+    },
+    {
+      "apk_sha256": "5bbedf1c72d64c9a0d5bc95d41e045155e262d07cb9514e79945ab5757a993b4",
+      "label": "Malicious",
+      "reason": "small known partial-extraction case"
+    },
+    {
+      "apk_sha256": "02ad6ff525facc4213e9964ae9a5f4e19816b59ae4be622d6f04953ec8536ec0",
+      "label": "Benign",
+      "reason": "benign APK with multiple JNI-exported native libraries"
+    }
+  ]
+}
+

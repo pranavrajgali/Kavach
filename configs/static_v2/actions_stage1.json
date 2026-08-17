@@ -1,0 +1,19 @@
+[
+  {"signature_contains":"java.lang.Runtime: java.lang.Process exec(","endpoint_category":"PROCESS_EXECUTION","behavior_category":"COMMAND_EXECUTION"},
+  {"signature_contains":"java.lang.ProcessBuilder: java.lang.Process start(","endpoint_category":"PROCESS_EXECUTION","behavior_category":"COMMAND_EXECUTION"},
+  {"signature_contains":"android.telephony.SmsManager: void sendTextMessage(","endpoint_category":"SMS_TRANSMISSION","behavior_category":"SMS_TRANSMISSION"},
+  {"signature_contains":"android.telephony.SmsManager: void sendMultipartTextMessage(","endpoint_category":"SMS_TRANSMISSION","behavior_category":"SMS_TRANSMISSION"},
+  {"signature_contains":"android.telecom.TelecomManager: void placeCall(","endpoint_category":"TELEPHONY_CONTROL","behavior_category":"TELEPHONY_CONTROL"},
+  {"signature_contains":"dalvik.system.DexClassLoader: void <init>(","endpoint_category":"DYNAMIC_CODE_LOAD","behavior_category":"DYNAMIC_CODE_EXECUTION"},
+  {"signature_contains":"dalvik.system.InMemoryDexClassLoader: void <init>(","endpoint_category":"DYNAMIC_CODE_LOAD","behavior_category":"DYNAMIC_CODE_EXECUTION"},
+  {"signature_contains":"dalvik.system.DexFile: dalvik.system.DexFile loadDex(","endpoint_category":"DYNAMIC_CODE_LOAD","behavior_category":"DYNAMIC_CODE_EXECUTION"},
+  {"signature_contains":"android.content.pm.PackageInstaller$Session: void commit(","endpoint_category":"PACKAGE_INSTALLATION","behavior_category":"SOFTWARE_INSTALLATION"},
+  {"signature_contains":"android.content.pm.PackageInstaller: void uninstall(","endpoint_category":"PACKAGE_STATE_MODIFICATION","behavior_category":"PACKAGE_STATE_MODIFICATION"},
+  {"signature_contains":"android.view.accessibility.AccessibilityNodeInfo: boolean performAction(","endpoint_category":"ACCESSIBILITY_ACTION","behavior_category":"ACCESSIBILITY_OBSERVATION_OR_AUTOMATION"},
+  {"signature_contains":"android.accessibilityservice.AccessibilityService: boolean dispatchGesture(","endpoint_category":"ACCESSIBILITY_ACTION","behavior_category":"ACCESSIBILITY_OBSERVATION_OR_AUTOMATION"},
+  {"signature_contains":"android.accessibilityservice.AccessibilityService: boolean performGlobalAction(","endpoint_category":"ACCESSIBILITY_ACTION","behavior_category":"ACCESSIBILITY_OBSERVATION_OR_AUTOMATION"},
+  {"signature_contains":"android.media.AudioRecord: void startRecording(","endpoint_category":"AUDIO_CAPTURE","behavior_category":"SENSITIVE_CAPTURE"},
+  {"signature_contains":"android.media.MediaRecorder: void start(","endpoint_category":"MEDIA_CAPTURE","behavior_category":"SENSITIVE_CAPTURE"},
+  {"signature_contains":"android.app.admin.DevicePolicyManager: void lockNow(","endpoint_category":"DEVICE_POLICY_ACTION","behavior_category":"DEVICE_POLICY_OR_SECURITY_MODIFICATION"},
+  {"signature_contains":"android.app.admin.DevicePolicyManager: void wipeData(","endpoint_category":"DEVICE_POLICY_ACTION","behavior_category":"DEVICE_POLICY_OR_SECURITY_MODIFICATION"}
+]
