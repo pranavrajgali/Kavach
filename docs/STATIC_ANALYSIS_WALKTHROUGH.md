@@ -1,30 +1,31 @@
 # Kavach.ai: Static Analysis & SecureBERT-2.0 LoRA Walkthrough
 
-This document provides a comprehensive technical walkthrough of the **Static Analysis and Deep Learning Inference Pipelines (Stages 1, 2, 3 & 5)** within Kavach.ai. It covers the architectural data flow, technology stack, backward program slicing, JNI bridge resolution, SecureBERT-2.0 model architecture with LoRA (Low-Rank Adaptation), SHAP feature explainability, and frontend visualization.
+This document provides a comprehensive technical walkthrough of the **Static Analysis and Deep Learning Inference Pipelines (Stages 1, 2, 3 & 5)** within Kavach.ai. It covers the architectural data flow, technology stack, sub-second in-memory Dalvik bytecode extraction, backward program slicing, FlowDroid V2 taint tracking, Ghidra native evidence parsing, Multi-Instance Learning (MIL), SecureBERT-2.0 model architecture with LoRA (Low-Rank Adaptation), Attention LRP (Layer-wise Relevance Propagation) explainability, and frontend visualization.
 
 ---
 
 ## 1. Architectural Architecture & Data Flow
 
-The static analysis pipeline operates as a deterministic, sub-second screening and semantic intelligence engine. When an APK is uploaded, it passes through sequential static extraction and neural classification stages before dynamic detonation.
+The static analysis pipeline operates as a deterministic, high-throughput screening and semantic intelligence engine. When an APK is uploaded, it passes through sequential static triage, in-memory bytecode extraction, FlowDroid/Ghidra V2 behavioral analysis, and transformer classification stages before dynamic detonation.
 
 ```mermaid
 sequenceDiagram
     participant Frontend as React SPA (Vite)
     participant Backend as FastAPI Server
     participant Triage as Stage 1: Manifest Triage Filter
-    participant Decompiler as Stage 2A: Decompiler & Slicer
-    participant JNI as Stage 2B: JNI Bridge Parser
-    participant BERT as Stage 3: SecureBERT-2.0 LoRA
-    participant SHAP as Stage 5: Explainability Engine
+    participant DEX as Stage 2A: High-Speed DEX Extractor
+    participant FlowDroid as Stage 2B: FlowDroid V2 Sidecar
+    participant Ghidra as Stage 2C: Ghidra Native Parser
+    participant BERT as Stage 3: SecureBERT-2.0 LoRA & MIL
+    participant LRP as Stage 5: Attention LRP & SHAP Engine
 
-    Frontend->>Backend: POST /api/analyze-static (Upload APK)
+    Frontend->>Backend: POST /api/static-scan-stream (Upload APK)
     Backend->>Triage: fast_triage_apk(apk_bytes)
     
     rect rgb(20, 25, 35)
         Note over Triage: 10-Millisecond Triage Filter
         Triage->>Triage: Parse AndroidManifest.xml (Permissions & Components)
-        Triage->>Triage: Evaluate Dangerous Permission Combinations
+        Triage->>Triage: Classify Signature/Dangerous Permissions & High-Risk Combos
         Triage->>Triage: Compute Reflection & Obfuscation Density Score
     end
     
@@ -32,32 +33,33 @@ sequenceDiagram
     Backend->>Frontend: Stream Stage 1 Triage Scorecard SSE
 
     rect rgb(25, 20, 30)
-        Note over Decompiler, JNI: Static Slicing & JNI Bridge Mapping
-        Backend->>Decompiler: extract_and_slice(apk_path)
-        Decompiler->>Decompiler: Construct Control Flow Graph (CFG)
-        Decompiler->>Decompiler: Backward Program Slicing from Dangerous Sinks
-        Decompiler->>Decompiler: Fallback to Raw Smali if AST Decompile Fails
-        Backend->>JNI: analyze_jni_bridges(extracted_libraries)
-        JNI->>JNI: Resolve Native Symbols (llvm-nm / readelf / python_elf)
-        JNI->>JNI: Map Short/Long Mangled Names (Java_pkg_class_method)
+        Note over DEX, Ghidra: Sub-Second Slicing, FlowDroid Taint & Native JNI
+        Backend->>DEX: extract_apk_slices(apk_path) [In-Memory DEX ~1.5s]
+        DEX->>DEX: Parse Dalvik Bytecode via Androguard in RAM
+        DEX->>DEX: Construct Call Graph & Backward Slices from Sensitive Sinks
+        Backend->>FlowDroid: run_flowdroid(sidecar_jar, apk_path)
+        FlowDroid->>FlowDroid: Jimple Inter-Procedural Taint Tracking (Sources/Sinks)
+        Backend->>Ghidra: parse_native_evidence(so_libraries)
+        Ghidra->>Ghidra: JNI Bridge Export Mappings & Native Symbol Dissassembly
     end
 
-    Decompiler-->>Backend: Extracted Smali Slices
-    JNI-->>Backend: JniAnalysisResult (Mapped Exports, Dynamic Registrations)
+    DEX-->>Backend: Normalized Dalvik Program Slices
+    FlowDroid-->>Backend: ManagedAnalysisArtifact (Taint Paths & Diagnostics)
+    Ghidra-->>Backend: NativeEvidenceArtifact (JNI Symbols & Offsets)
 
     rect rgb(20, 30, 25)
-        Note over BERT, SHAP: SecureBERT-2.0 LoRA Inference & Explainability
-        Backend->>BERT: predict_slices(smali_slices)
-        BERT->>BERT: Normalize Registers & Smali Opcodes
+        Note over BERT, LRP: SecureBERT-2.0 LoRA Inference & Attention LRP
+        Backend->>BERT: predict_slices(normalized_slices)
         BERT->>BERT: Forward Pass (151M Base Frozen + 1.7M LoRA Adapters)
+        BERT->>BERT: Multi-Instance Learning (MIL) Bag-Level Threat Aggregation
         BERT-->>Backend: Slice Threat Probabilities (0.0 to 1.0)
         
-        Backend->>SHAP: explain_slice_attributions(top_slices)
-        SHAP->>SHAP: Compute PartitionSHAP / FastSHAP Token Weights
-        SHAP-->>Backend: Token Attribution Matrices & Glow Heatmaps
+        Backend->>LRP: compute_attention_lrp(active_model, top_slices)
+        LRP->>LRP: R = clamp(A ⊙ ∇A, min=0) [Layer-wise Relevance Propagation]
+        LRP-->>Backend: Token Relevance Matrices & Interactive Code Heatmaps
     end
 
-    Backend->>Frontend: Stream Result SSE (Static IR, Predictions, SHAP Weights)
+    Backend->>Frontend: Stream Result SSE (Static IR, Predictions, LRP Weights)
     Frontend->>Frontend: Render StaticView & BertClassifierView Dashboard
 ```
 
@@ -73,37 +75,37 @@ graph TD
 
     subgraph "Stage 1: Manifest Triage (<10ms)"
         TriageEng[Fast Triage Engine]
-        PermMatrix[Dangerous Permission Combinations Matrix]
+        PermMatrix[Dangerous Permission Matrix & Classification]
         ObfScan[Reflection & Obfuscation Density Scan]
         APK --> TriageEng
         TriageEng --> PermMatrix
         TriageEng --> ObfScan
     end
 
-    subgraph "Stage 2: Decompilation & Native Slicing"
-        CFG[Control Flow Graph Engine]
+    subgraph "Stage 2: Decompilation, Taint Tracking & Native Slicing"
+        InMemoryDEX[In-Memory DEX Extractor <1.5s]
         Slicer[Backward Program Slicer]
-        SmaliFallback[Raw Smali Opcode Fallback]
-        JNIParser[JNI Bridge Symbol Resolver]
+        FlowDroidSidecar[FlowDroid V2 Sidecar - Java Inter-procedural Taint]
+        GhidraParser[Ghidra Native Parser - JNI Symbol Resolver]
         
-        APK --> CFG
-        CFG --> Slicer
-        CFG -.->|AST Crash| SmaliFallback
-        APK --> JNIParser
+        APK --> InMemoryDEX
+        InMemoryDEX --> Slicer
+        APK --> FlowDroidSidecar
+        APK --> GhidraParser
     end
 
     subgraph "Stage 3 & 5: Deep Learning & Explainability"
         Norm[Smali Opcode Normalizer]
         BERT["SecureBERT-2.0 Base<br/>(151M Params - FROZEN)"]
         LoRA["LoRA Adapter Matrices (r=8)<br/>(1.7M Params - TRAINED)"]
-        SHAPEng[FastSHAP / PartitionSHAP Token Attributor]
+        MIL["Multi-Instance Learning (MIL) Aggregator"]
+        LRPEng["Attention LRP Token Attributor<br/>R = clamp(A ⊙ ∇A, min=0)"]
         
         Slicer --> Norm
-        SmaliFallback --> Norm
         Norm --> BERT
-        Norm --> LoRA
-        BERT & LoRA --> ClassifierHead[Binary Threat Classification Head]
-        ClassifierHead --> SHAPEng
+        BERT --> LoRA
+        LoRA --> MIL
+        BERT --> LRPEng
     end
 
     subgraph Output Synthesis
@@ -245,15 +247,22 @@ The model was trained across multiple configurations specified in [`training/con
 
 ---
 
-## 5. Explainability Engine: SHAP Token Attribution
+## 5. Explainability Engine: Attention LRP & SHAP Token Attribution
 
-To provide complete transparency to cybersecurity analysts, Kavach does not treat SecureBERT-2.0 as a black box. Stage 5 computes token-level Shapley attribution values for every classified Smali slice:
+To provide complete transparency to cybersecurity analysts, Kavach does not treat SecureBERT-2.0 as a black box. Stage 5 computes token-level Layer-wise Relevance Propagation (Attention LRP) and Shapley attribution values for every classified Smali slice:
 
-1. **FastSHAP / PartitionSHAP Algorithm**: Evaluates the marginal contribution of each Smali opcode, register, and API call to the final malicious probability score.
-2. **Attribution Sign Mapping**:
-   * **Positive SHAP (+)**: Red highlights indicate tokens that strongly drove the classification toward **MALICIOUS** (e.g., `sendTextMessage`, `DexClassLoader`, `getDeviceId`, `chmod 777`).
-   * **Negative SHAP (-)**: Blue highlights indicate tokens characteristic of standard benign programming logic (e.g., standard UI callbacks, logging, string builders).
-3. **Interactive Highlighting**: Rendered in the frontend using HSL-based colored glows, allowing analysts to inspect the exact lines of code that triggered the alert in sub-second time.
+### 5.1. Mathematical Formulation of Attention LRP
+1. **Gradient-Weighted Attention Hooking**: Hooks into self-attention probability tensors ($A$) across model layers during backward pass.
+2. **Relevance Backpropagation Equation**:
+   $$R = \text{clamp}(A \odot \nabla_A, \min=0)$$
+3. **Head Averaging & Column Reduction**:
+   $$\bar{R}_{i,j} = \frac{1}{H} \sum_{h=1}^{H} R_{h,i,j} \quad \implies \quad \text{Attribution}(j) = \sum_{i} \bar{R}_{i,j}$$
+4. **Token Attribution Mapping**:
+   * **Positive Relevance (+)**: Glowing red/yellow highlights indicate tokens that strongly drove the classification toward **MALICIOUS** (e.g., `sendTextMessage`, `Cipher`, `DexClassLoader`, `getDeviceId`, `chmod 777`).
+   * **Benign Traits**: Green/blue highlights indicate tokens characteristic of standard benign programming logic.
+
+### 5.2. Interactive Frontend Heatmaps
+* Rendered in the frontend using HSL-based colored glows in [`bert-classifier-view.tsx`](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/frontend/src/components/views/bert-classifier-view.tsx), allowing analysts to inspect the exact lines of code and tokens that triggered the alert in sub-second time.
 
 ---
 

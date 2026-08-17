@@ -1,18 +1,19 @@
 # Kavach.ai: Dynamic Analysis & Sandbox Detonation Walkthrough
 
-This document provides a comprehensive technical walkthrough of the **Dynamic Analysis Pipeline (Stage 4)** within Kavach.ai. It covers the architecture, the technology stack, the active evasion bypassing mechanisms (time dilution, intent injection, JNI scanning, anti-root, and SSL pinning), how runtime telemetry is gathered, and how it is streamed and visualized in the React frontend.
+This document provides a comprehensive technical walkthrough of the **Dynamic Analysis Pipeline (Stage 4)** within Kavach.ai. It covers the architecture, the technology stack, the active evasion bypassing mechanisms (time dilution, intent injection, JNI scanning, anti-root, and SSL pinning), Generative AI dynamic Frida hook synthesis, how runtime telemetry is gathered, and how it is streamed and visualized in the React frontend.
 
 ---
 
 ## 1. Architectural Architecture & Data Flow
 
-The Kavach.ai dynamic analysis phase operates as a reactive sandbox detonation system. When an APK is uploaded, it is routed to a physical or simulated Android environment where its runtime behaviors are monitored under active evasion mitigation hooks.
+The Kavach.ai dynamic analysis phase operates as a reactive sandbox detonation system. When an APK is uploaded, it is routed to a physical or virtual Android environment (e.g. Genymotion, emulator, or network ADB target) where its runtime behaviors are monitored under active evasion mitigation hooks.
 
 ```mermaid
 sequenceDiagram
     participant Frontend as React SPA (Vite)
     participant Backend as FastAPI Server
     participant Detonator as DetonationOrchestrator
+    participant LLMFrida as LLM Frida Synthesizer
     participant Frida as Frida Hooking Engine
     participant eBPF as eBPF Kernel Tracker
     participant Emulator as Android Device (ADB)
@@ -23,17 +24,19 @@ sequenceDiagram
     
     rect rgb(20, 20, 25)
         Note over Backend, Emulator: Detonation Sequence Started
+        Backend->>LLMFrida: synthesize_hooks(static_sinks)
+        LLMFrida->>LLMFrida: Query OpenRouter Qwen Coder / Groq Fallback
+        LLMFrida-->>Detonator: Custom AI Frida Interceptors Script
         Backend->>eBPF: start_trace(package_name)
-        eBPF->>eBPF: Initialize Syscall / File / Socket Tracing
         Backend->>Detonator: detonate_apk()
-        Detonator->>Emulator: adb install -r apk_path
-        Detonator->>Emulator: Grant Permissions & Activate Device Admin
-        Detonator->>Frida: frida -U -f package -l frida_bypass.js
-        Frida->>Emulator: Inject Anti-Root, SSL Pinning & Time Dilution Hooks
+        Detonator->>Emulator: adb install -r -g -d apk_path (Timeout: 90s)
+        Detonator->>Emulator: Auto-Grant Overlay (SYSTEM_ALERT_WINDOW) & Device Admin
+        Detonator->>Frida: frida -U -f package -l unified_frida.js
+        Frida->>Emulator: Inject Anti-Root, SSL Pinning, Time Dilution & AI Sinks
         Detonator->>Emulator: Broadcast Intents (BOOT_COMPLETED, BATTERY_LOW [0x00000020])
-        Detonator->>Emulator: Trigger UI Activities via monkey
+        Detonator->>Emulator: Trigger UI Activities via monkey & dismiss overlays
         Frida-->>Detonator: Stream Hook Hits (File I/O, Sockets, JNI .so Loads, Time Dilution)
-        Detonator->>Emulator: Observe telemetry for duration (10s)
+        Detonator->>Emulator: Observe telemetry for duration (10s / 30s / 60s)
     end
 
     eBPF->>Backend: Dump Telemetry Payload to telemetry.json
@@ -56,12 +59,14 @@ graph TD
         
         subgraph Active Evasion Countermeasures
             Detonator -->|1. Intent Injection| Intents["Intent Broadcaster<br/>(BOOT_COMPLETED, BATTERY_LOW)<br/>Flag: 0x00000020"]
-            Detonator -->|2. Runtime Instrumentation| Frida[Frida Dynamic Hooks]
+            Detonator -->|2. AI Hook Generation| LLM["LLMFrida Synthesizer<br/>(OpenRouter Qwen 2.5 Coder / Groq 70B)"]
+            LLM --> Frida[Frida Dynamic Hooks]
             
             Frida --> RootHook["Anti-Root Bypass<br/>(File.exists, Runtime.exec, ro.build.tags)"]
             Frida --> SSLHook["SSL Pinning Bypass<br/>(TrustManager, OkHttp3 CertificatePinner)"]
             Frida --> TimeHook["Time Dilution Engine<br/>(Thread.sleep & SystemClock.sleep &gt; 50ms &rarr; 10ms<br/>Handler.postDelayed &gt; 1s &rarr; 50ms)"]
             Frida --> JNIHook["Dynamic JNI Tracking<br/>(Runtime.load, Runtime.loadLibrary)"]
+            Frida --> AISinks["Custom AI Dynamic Interceptors<br/>(SMS, Ciphers, Accessibility, Keylogging)"]
         end
         
         subgraph Telemetry Gathering
@@ -78,41 +83,42 @@ graph TD
 
 The dynamic analysis pipeline integrates several specialized security and systems-level tools:
 
-*   **FastAPI (Python 3)**: Serves as the high-throughput backend gateway. It processes incoming multipart/form-data APK uploads, spawns asynchronous tasks using `asyncio.to_thread`, redirects pipeline logger output thread-safely into an `asyncio.Queue` using a custom `AsyncQueueHandler`, and streams live log events to the frontend via **Server-Sent Events (SSE / EventSource)**.
-*   **Android Debug Bridge (ADB)**: Acts as the command bridge to target devices/emulators. It installs the application, launches core activities, broadcasts hardware-level intents (`BOOT_COMPLETED`, `BATTERY_LOW`), auto-activates device admin policies, and uninstalls the app upon compilation.
-*   **Frida**: A dynamic instrumentation toolkit. Used to inject JavaScript hooks into the Dalvik/ART runtime at app-startup to override security checks (Root, SSL Pinning) and accelerate artificial timing delays (Time Dilution).
-*   **eBPF (Extended Berkeley Packet Filter)**: Operates at the Linux/Android kernel level. It hooks system calls (`sys_clone`, `sys_connect`, `sys_openat`, `sys_write`) to track file I/O and network sockets invisibly, bypassing user-space tampering.
-*   **React & TypeScript (Vite)**: The user-facing dashboard. Uses SSE streams to show live logs in an interactive terminal, parses telemetry data, calculates risk indexes, and draws analytical graphs using **Recharts**.
+*   **FastAPI (Python 3)**: High-throughput backend gateway. Spawns asynchronous tasks using `asyncio.to_thread`, redirects pipeline logger output thread-safely into an `asyncio.Queue` using a custom `AsyncQueueHandler`, and streams live log events to the frontend via **Server-Sent Events (SSE / EventSource)**.
+*   **Android Debug Bridge (ADB)**: Command bridge to connected Genymotion VMs, physical devices, or emulators. Deploys applications, auto-grants overlay permissions (`SYSTEM_ALERT_WINDOW`), launches core activities, broadcasts hardware-level intents (`BOOT_COMPLETED`, `BATTERY_LOW`), auto-activates device admin policies, and uninstalls the app upon compilation.
+*   **Frida Core**: Dynamic instrumentation toolkit. Injects JavaScript hooks into the Dalvik/ART runtime at app startup to override security checks (Root, SSL Pinning), accelerate artificial timing delays (Time Dilution), and trace native JNI calls.
+*   **Code-LLM Frida Synthesizer**: Automatically generates targeted dynamic interceptors from static sink signatures using OpenRouter `qwen/qwen-2.5-coder-32b-instruct` and Groq `llama-3.3-70b-versatile`.
+*   **eBPF (Extended Berkeley Packet Filter)**: Operates at the Linux/Android kernel level. Hooks system calls (`sys_clone`, `sys_connect`, `sys_openat`, `sys_write`) to track file I/O and network sockets invisibly, bypassing user-space tampering.
+*   **React & TypeScript (Vite)**: User-facing dashboard with real-time log streaming, terminal consoles, and forensic telemetry visualization using **Recharts**.
 
 ---
 
 ## 3. Detailed Script Analysis (Dynamic Side)
 
-The core dynamic pipeline scripts reside under [kavach_ai/backend/pipeline/stage4_dynamic](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/pipeline/stage4_dynamic).
+The core dynamic pipeline scripts reside under [`kavach_ai/backend/pipeline/stage4_dynamic`](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/pipeline/stage4_dynamic).
 
 ### 3.1. Stage 4 Pipeline Orchestrator: `__init__.py`
-*   **File Link**: [__init__.py](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/pipeline/stage4_dynamic/__init__.py)
-*   **Primary Responsibility**: Coordinates the tracking and detonation modules.
+*   **File Link**: [`__init__.py`](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/pipeline/stage4_dynamic/__init__.py)
+*   **Primary Responsibility**: Coordinates the tracking, AI hook generation, and detonation modules.
 *   **Core Logic**:
-    1.  Resolves paths for local outputs (`telemetry.json`) and the Frida scripts.
-    2.  Instantiates `DetonationOrchestrator` to detect device presence.
-    3.  If live device is connected: runs `orchestrator.detonate_apk()` and compiles the dynamic telemetry payload containing:
-        - `objection_root_bypass`: Boolean flag for root evasion triggers.
-        - `objection_ssl_pinning_bypass`: Boolean flag for SSL pinning bypass triggers.
-        - `time_dilution_bypass`: Boolean flag for intercepted `Thread.sleep`/`SystemClock.sleep` delays.
-        - `ebpf_telemetry`: File accesses, network connections, and kernel syscalls.
-        - `native_libraries`: Dynamically loaded `.so` libraries.
-    4.  If no device is connected: activates `EBPFTracker` in simulation fallback mode to emit synthetic, high-fidelity threat telemetry matching the live schema.
+    1. Resolves paths for local outputs (`telemetry.json`) and the Frida scripts.
+    2. Instantiates `DetonationOrchestrator` to detect device presence.
+    3. If live device is connected: runs `orchestrator.detonate_apk()` and compiles the dynamic telemetry payload containing:
+       - `objection_root_bypass`: Boolean flag for root evasion triggers.
+       - `objection_ssl_pinning_bypass`: Boolean flag for SSL pinning bypass triggers.
+       - `time_dilution_bypass`: Boolean flag for intercepted `Thread.sleep`/`SystemClock.sleep` delays.
+       - `ebpf_telemetry`: File accesses, network connections, and kernel syscalls.
+       - `native_libraries`: Dynamically loaded `.so` libraries.
+    4. If no device is connected: activates `EBPFTracker` in simulation fallback mode to emit synthetic, high-fidelity threat telemetry matching the live schema.
 
 ### 3.2. Detonation Orchestrator: `detonate.py`
-*   **File Link**: [detonate.py](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/pipeline/stage4_dynamic/detonate.py)
+*   **File Link**: [`detonate.py`](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/pipeline/stage4_dynamic/detonate.py)
 *   **Primary Responsibility**: Manages the Android sandbox lifecycle (ADB deployments, Frida instrumentation, permission/admin management, time dilution event parsing, and intent broadcasts).
 *   **Core Operations**:
     *   `_check_device_connected`: Runs `adb devices` to identify if an active emulator/device is connected, ignoring `"offline"` or `"unauthorized"` states.
     *   `_get_device_abi`: Queries the device's CPU architecture via `adb shell getprop ro.product.cpu.abi` (falling back to `ro.product.cpu.abilist`).
     *   `_strip_native_libraries`: Extracts the APK and removes the `/lib` directory to prevent architecture-mismatch installation failures (`INSTALL_FAILED_NO_MATCHING_ABIS`).
-    *   `install_apk`: Implements a 3-attempt retry loop that handles APK deployment, signing invalid packages (`jarsigner`) or stripping ABIs when needed.
-    *   `_auto_activate_device_admin`: Programmatically activates registered `DEVICE_ADMIN_ENABLED` receivers using `adb shell dpm set-active-admin` without prompting the user.
+    *   `install_apk`: Implements a 3-attempt retry loop with extended 90s timeout that handles APK deployment, multi-ABI handling (`-r -g -d`), and auto-signing when needed.
+    *   `_grant_malware_privileges`: Auto-grants `SYSTEM_ALERT_WINDOW` overlays, activates registered `DEVICE_ADMIN_ENABLED` receivers via `adb shell dpm set-active-admin`, and enables accessibility service endpoints.
     *   `trigger_intents`: Executes activity manager shell commands (`am broadcast`) with flag `0x00000020` (`FLAG_INCLUDE_STOPPED_PACKAGES`) to detonate dormant banking trojans and droppers that wait for `BOOT_COMPLETED` or `BATTERY_LOW` system events.
     *   `_read_frida_output`: Intercepts and parses real-time Frida log streams, detecting:
         - Anti-root evasion attempts.
@@ -122,22 +128,19 @@ The core dynamic pipeline scripts reside under [kavach_ai/backend/pipeline/stage
         - Network socket connections (`IP:Port`).
         - Native JNI library loads (`Runtime.load` / `Runtime.loadLibrary`).
     *   `detonate_apk`: Orchestrates the sequence synchronously:
-        `Install` $\rightarrow$ `Grant Permissions` $\rightarrow$ `Auto-activate Device Admin` $\rightarrow$ `Spawn Frida Hooks` $\rightarrow$ `Trigger Intents (BOOT_COMPLETED / BATTERY_LOW)` $\rightarrow$ `Dismiss Overlays` $\rightarrow$ `Wait 10s (Observation)` $\rightarrow$ `Uninstall App`.
+        `Install` $\rightarrow$ `Grant Permissions` $\rightarrow$ `Auto-activate Device Admin` $\rightarrow$ `Synthesize AI Frida Hooks` $\rightarrow$ `Spawn Frida Hooks` $\rightarrow$ `Trigger Intents (BOOT_COMPLETED / BATTERY_LOW)` $\rightarrow$ `Dismiss Overlays` $\rightarrow$ `Wait Observation Window (10s/30s/60s)` $\rightarrow$ `Uninstall App`.
 
-### 3.3. eBPF Tracker: `scripts/ebpf_trace.py`
-*   **File Link**: [ebpf_trace.py](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/pipeline/stage4_dynamic/scripts/ebpf_trace.py)
-*   **Primary Responsibility**: Tracks system calls, socket creation, and filesystem access.
-*   **Core Operations**:
-    *   `check_ebpf_support`: Inspects `/sys/kernel/debug/tracing`. On development systems without kernel debug headers, triggers high-fidelity fallback telemetry.
-    *   `generate_mock_telemetry`: Constructs realistic trace data mirroring active malware behavior:
-        *   **Bypasses**: `objection_root_bypass: true`, `objection_ssl_pinning_bypass: true`, `time_dilution_bypass: true`.
-        *   **Syscalls**: `sys_clone`, `sys_execve`, `sys_socket`, `sys_connect`, `sys_write`, `sys_openat`.
-        *   **Files Accessed**: `/data/user/0/<package>/shared_prefs/config.xml`, `/proc/self/maps`, `/system/bin/app_process32`.
-        *   **Network Connections**: Direct C2 connections (`198.51.100.42:4444` TCP) and DNS queries (`8.8.8.8:53` UDP).
-    *   `start_trace`: Writes the gathered telemetry to `telemetry.json`.
+### 3.3. Generative AI Dynamic Frida Hook Synthesizer: `llm_frida_synthesizer.py`
+*   **File Link**: [`llm_frida_synthesizer.py`](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/pipeline/stage4_dynamic/llm_frida_synthesizer.py)
+*   **Primary Responsibility**: Dynamically generates target-specific Frida JavaScript interceptors on the fly using Code-LLMs.
+*   **Architecture & Model Fallback Cascade**:
+    1.  **Static Sinks Ingestion**: Consumes extracted Dalvik sinks (SMS handlers, `DexClassLoader`, accessibility keyloggers, cryptographic ciphers).
+    2.  **OpenRouter Code-LLM Integration**: Queries `qwen/qwen-2.5-coder-32b-instruct` at low temperature ($T=0.1$) for deterministic Java method hooking.
+    3.  **Groq High-Speed Fallback**: Automatically cascades to Groq Cloud (`llama-3.3-70b-versatile` $\rightarrow$ `llama-3.1-8b-instant`) if OpenRouter is unreachable.
+    4.  **Script Assembly & Assembly Sanitization**: Validates syntax, strips markdown wrappers, verifies presence of `Java.perform(...)`, and merges custom AI hooks with core anti-evasion scripts.
 
 ### 3.4. Frida Hook Script: `scripts/frida_bypass.js`
-*   **File Link**: [frida_bypass.js](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/pipeline/stage4_dynamic/scripts/frida_bypass.js)
+*   **File Link**: [`frida_bypass.js`](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/pipeline/stage4_dynamic/scripts/frida_bypass.js)
 *   **Primary Responsibility**: Deactivates anti-sandboxing controls (Root, SSL Pinning, Sleep Evasion) and logs runtime telemetry.
 *   **Stability & Thread Safety Enhancements**:
     *   **Thread-Local Re-entrancy Guards**: Employs a Java `ThreadLocal` object (boxed `java.lang.Boolean`) to prevent infinite recursion/deadlocks inside filesystem hook wrappers (`FileInputStream`/`FileOutputStream`).
@@ -160,6 +163,18 @@ The core dynamic pipeline scripts reside under [kavach_ai/backend/pipeline/stage
         *   `Socket.connect`: Logs outbound network IP/port destinations.
         *   `Runtime.load` / `Runtime.loadLibrary`: Scans and logs dynamically loaded native JNI shared libraries (`.so`).
 
+### 3.5. eBPF Tracker: `scripts/ebpf_trace.py`
+*   **File Link**: [`ebpf_trace.py`](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/pipeline/stage4_dynamic/scripts/ebpf_trace.py)
+*   **Primary Responsibility**: Tracks system calls, socket creation, and filesystem access directly in kernel space.
+*   **Core Operations**:
+    *   `check_ebpf_support`: Inspects `/sys/kernel/debug/tracing`. On development environments without raw kernel debug headers, seamlessly triggers high-fidelity fallback telemetry.
+    *   `generate_mock_telemetry`: Constructs realistic trace data mirroring active malware behavior:
+        *   **Bypasses**: `objection_root_bypass: true`, `objection_ssl_pinning_bypass: true`, `time_dilution_bypass: true`.
+        *   **Syscalls**: `sys_clone`, `sys_execve`, `sys_socket`, `sys_connect`, `sys_write`, `sys_openat`.
+        *   **Files Accessed**: `/data/user/0/<package>/shared_prefs/config.xml`, `/proc/self/maps`, `/system/bin/app_process32`.
+        *   **Network Connections**: Direct C2 connections (`198.51.100.42:4444` TCP) and DNS queries (`8.8.8.8:53` UDP).
+    *   `start_trace`: Writes the gathered telemetry payload to `telemetry.json`.
+
 ---
 
 ## 4. Frontend-Backend Communication Flow (SSE)
@@ -167,30 +182,19 @@ The core dynamic pipeline scripts reside under [kavach_ai/backend/pipeline/stage
 Real-time terminal execution logging is achieved using Server-Sent Events (SSE).
 
 ### Backend Streaming Endpoint: `main.py`
-*   **File Link**: [main.py](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/app/main.py)
-*   **Endpoint**: `POST /api/detonate-stream?simulation={true/false}`
+*   **File Link**: [`main.py`](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/backend/app/main.py)
+*   **Endpoint**: `POST /api/detonate-stream?simulation={true/false}&duration={10|30|60}`
 *   **Logic**:
-    1.  Saves the incoming file streams to a temporary `.apk` file.
-    2.  Resolves the APK's package identifier using `pyaxmlparser`/`androguard`.
-    3.  Yields a `metadata` event:
-        ```json
-        { "type": "metadata", "apk_details": { "name": "...", "size": "...", "package": "..." } }
-        ```
-    4.  **Log Interception**: Attaches an `AsyncQueueHandler` to system loggers (`KavachDetonator`, `KavachPipelineStage4`, `KavacheBPF`).
-    5.  **Streaming Loop**: Yields log lines as SSE events in real-time:
-        ```text
-        data: {"type": "log", "message": "Installing APK..."}
-        ```
-    6.  **Results Yield**: Once detonation finishes, it retrieves the final parsed telemetry dictionary and sends the `result` event:
-        ```json
-        { "type": "result", "telemetry": { ... } }
-        ```
+    1. Saves incoming file streams to a persisted upload directory.
+    2. Resolves the APK package identifier.
+    3. Yields metadata SSE event.
+    4. Attaches `AsyncQueueHandler` to pipeline loggers and yields SSE log chunks.
+    5. Yields final `result` SSE payload containing full telemetry.
 
 ### Frontend Event Source Reader: `DetonationContext.tsx`
-*   **File Link**: [DetonationContext.tsx](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/frontend/src/context/DetonationContext.tsx)
+*   **File Link**: [`DetonationContext.tsx`](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/frontend/src/context/DetonationContext.tsx)
 *   **Mechanism**:
-    *   Reads the streaming body directly using `response.body.getReader()`.
-    *   Decodes chunks using `TextDecoder` and splits by the event boundary `\n\n`.
+    *   Consumes the streaming body via `consumeSseBuffer` to ensure unbroken chunk decoding across network boundaries.
     *   State Transitions:
         *   `type: 'log'` $\rightarrow$ Appends to `logs` state (rendered dynamically in `TerminalConsole`).
         *   `type: 'metadata'` $\rightarrow$ Sets `apkDetails` state.
@@ -201,7 +205,7 @@ Real-time terminal execution logging is achieved using Server-Sent Events (SSE).
 
 ## 5. Frontend Telemetry Analysis & Consumption
 
-Once the backend streams the `result` payload, the [report-view.tsx](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/frontend/src/components/report-view.tsx) dashboard parses the telemetry to generate intelligence widgets.
+Once the backend streams the `result` payload, the [`report-view.tsx`](file:///c:/Users/Admin/Documents/Projects/Kavach/kavach_ai/frontend/src/components/report-view.tsx) dashboard parses the telemetry to generate intelligence widgets.
 
 ### 5.1. Threat Score Calculation
 The frontend computes a dynamic risk score (`probability`) at runtime based on the telemetry parameters:
