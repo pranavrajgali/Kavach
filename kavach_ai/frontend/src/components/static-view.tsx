@@ -606,44 +606,107 @@ export const StaticView: React.FC = () => {
     return permString.includes(searchLower) || infoString.includes(searchLower) || descString.includes(searchLower);
   });
 
-  // ── Static SHAP Feature Attribution ──
+  // ── Static SHAP & Attention LRP Feature Attribution ──
   const shapData: { name: string; value: number }[] = [];
-  
-  // Mapping of raw permission to human-readable label and risk weight
-  const permissionWeights: Record<string, { label: string, value: number }> = {
-    'android.permission.INTERNET': { label: 'Internet Access', value: 0.10 },
-    'android.permission.ACCESS_NETWORK_STATE': { label: 'Network State', value: 0.05 },
-    'android.permission.ACCESS_WIFI_STATE': { label: 'WiFi State', value: 0.05 },
-    'android.permission.READ_CONTACTS': { label: 'Read Contacts', value: 0.25 },
-    'android.permission.READ_SMS': { label: 'Read SMS', value: 0.30 },
-    'android.permission.SEND_SMS': { label: 'Send SMS', value: 0.35 },
-    'android.permission.RECEIVE_SMS': { label: 'Receive SMS', value: 0.35 },
-    'android.permission.ACCESS_FINE_LOCATION': { label: 'Fine Location', value: 0.20 },
-    'android.permission.RECORD_AUDIO': { label: 'Record Audio', value: 0.25 },
-    'android.permission.CAMERA': { label: 'Camera Access', value: 0.20 },
-    'android.permission.READ_EXTERNAL_STORAGE': { label: 'Read Storage', value: 0.15 },
-    'android.permission.WRITE_EXTERNAL_STORAGE': { label: 'Write Storage', value: 0.15 },
-    'android.permission.BIND_ACCESSIBILITY_SERVICE': { label: 'Accessibility', value: 0.40 },
-    'android.permission.RECEIVE_BOOT_COMPLETED': { label: 'Boot Persistence', value: 0.20 },
-    'android.permission.REQUEST_INSTALL_PACKAGES': { label: 'Install Apps', value: 0.30 },
-    'android.permission.WAKE_LOCK': { label: 'Wake Lock', value: 0.10 },
-    'android.permission.POST_NOTIFICATIONS': { label: 'Post Notifications', value: 0.05 },
+  const sliceEvals = staticResults?.ml_metrics?.slice_evaluations || [];
+  const combinationsList = staticResults?.triage?.permission_combinations || [];
+
+  // 1. Ingest model-evaluated code slices (Attention LRP & Bytecode predictions)
+  if (sliceEvals.length > 0) {
+    sliceEvals.forEach((se: any, i: number) => {
+      let sinkName = `Slice ${se.slice_index || i + 1}`;
+      const snippet = se.code_snippet || '';
+      
+      if (snippet.includes('sendTextMessage') || snippet.includes('sendMultipartTextMessage')) {
+        sinkName = 'SmsManager.sendText';
+      } else if (snippet.includes('Cipher') || snippet.includes('doFinal')) {
+        sinkName = 'Cipher.doFinal';
+      } else if (snippet.includes('DexClassLoader') || snippet.includes('PathClassLoader')) {
+        sinkName = 'DexClassLoader';
+      } else if (snippet.includes('getDeviceId') || snippet.includes('getSubscriberId') || snippet.includes('getImei')) {
+        sinkName = 'Telephony.getDeviceId';
+      } else if (snippet.includes('performAction') || snippet.includes('AccessibilityNodeInfo')) {
+        sinkName = 'Accessibility.performAction';
+      } else if (snippet.includes('getRuntime') || snippet.includes('exec(')) {
+        sinkName = 'Runtime.exec';
+      } else if (snippet.includes('HttpURLConnection') || snippet.includes('connect')) {
+        sinkName = 'Socket.connect';
+      } else if (se.relevance_tokens && se.relevance_tokens.length > 0) {
+        const topToken = [...se.relevance_tokens].sort((a: any, b: any) => b[1] - a[1])[0];
+        if (topToken && topToken[0].trim().length > 2) {
+          sinkName = `LRP: ${topToken[0].trim()}`;
+        }
+      }
+
+      // Convert malicious probability to attribution value relative to neutral baseline (0.20)
+      const attrValue = Number((se.malicious_probability - 0.20).toFixed(2));
+      shapData.push({
+        name: sinkName,
+        value: attrValue
+      });
+    });
+  }
+
+  // 2. High-Risk Manifest Permissions & Dangerous Combinations
+  if (combinationsList.includes('SMS_EXFILTRATION')) {
+    shapData.push({ name: 'Comb: SMS Exfiltration', value: 0.45 });
+  }
+  if (combinationsList.includes('BACKGROUND_TRACKING')) {
+    shapData.push({ name: 'Comb: Background Track', value: 0.35 });
+  }
+  if (combinationsList.includes('REMOTE_INSTALLER') || combinationsList.includes('PAYLOAD_DOWNLOADER')) {
+    shapData.push({ name: 'Comb: Sideload Installer', value: 0.40 });
+  }
+
+  const highRiskPermWeights: Record<string, { label: string; value: number }> = {
+    'android.permission.BIND_ACCESSIBILITY_SERVICE': { label: 'Perm: Accessibility Bind', value: 0.45 },
+    'android.permission.SYSTEM_ALERT_WINDOW': { label: 'Perm: System Overlay', value: 0.40 },
+    'android.permission.ACCESS_SUPERUSER': { label: 'Perm: Superuser Access', value: 0.50 },
+    'android.permission.SEND_SMS': { label: 'Perm: Send SMS', value: 0.35 },
+    'android.permission.READ_SMS': { label: 'Perm: Read SMS', value: 0.30 },
+    'android.permission.PACKAGE_USAGE_STATS': { label: 'Perm: Usage Stats', value: 0.30 },
+    'android.permission.QUERY_ALL_PACKAGES': { label: 'Perm: Query All Packages', value: 0.25 },
+    'android.permission.RECORD_AUDIO': { label: 'Perm: Record Audio', value: 0.25 },
+    'android.permission.ACCESS_FINE_LOCATION': { label: 'Perm: Fine Location', value: 0.20 },
+    'android.permission.REQUEST_INSTALL_PACKAGES': { label: 'Perm: Request Install', value: 0.30 },
+    'android.permission.READ_CONTACTS': { label: 'Perm: Read Contacts', value: 0.20 },
+    'android.permission.MANAGE_EXTERNAL_STORAGE': { label: 'Perm: All Files Access', value: 0.25 },
   };
 
   permissionsList.forEach(perm => {
-    if (permissionWeights[perm]) {
-      shapData.push({ 
-        name: permissionWeights[perm].label, 
-        value: permissionWeights[perm].value 
-      });
-    } else {
-      // Fallback for unknown permissions (usually benign)
-      const label = perm.split('.').pop()?.replace(/_/g, ' ') || perm;
-      shapData.push({ name: label, value: -0.05 });
+    if (highRiskPermWeights[perm]) {
+      if (!shapData.some(d => d.name === highRiskPermWeights[perm].label)) {
+        shapData.push({
+          name: highRiskPermWeights[perm].label,
+          value: highRiskPermWeights[perm].value
+        });
+      }
     }
   });
 
-  const sortedShapData = [...shapData].sort((a, b) => Math.abs(a.value) - Math.abs(b.value));
+  // 3. Baseline & Benign Controls (Negative / Mitigating Attribution)
+  if (permissionsList.length < 5) {
+    shapData.push({ name: 'Restricted Manifest', value: -0.20 });
+  }
+  if (!permissionsList.some(p => p.includes('SMS') || p.includes('ACCESSIBILITY') || p.includes('SUPERUSER'))) {
+    shapData.push({ name: 'No High-Privilege Sinks', value: -0.30 });
+  }
+  if (staticResults?.ml_metrics?.verdict === 'BENIGN') {
+    shapData.push({ name: 'Model Low Variance', value: -0.25 });
+  }
+
+  // Deduplicate and select the top 8 most influential attributes
+  const uniqueShapMap = new Map<string, number>();
+  shapData.forEach(item => {
+    if (!uniqueShapMap.has(item.name)) {
+      uniqueShapMap.set(item.name, item.value);
+    }
+  });
+
+  const sortedShapData = Array.from(uniqueShapMap.entries())
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => Math.abs(a.value) - Math.abs(b.value))
+    .slice(-8);
 
   // ── Static Behavioral Risk Matrix ──
   let adware = 5;
