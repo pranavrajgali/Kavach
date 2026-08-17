@@ -181,9 +181,89 @@ const ANDROID_PERMISSIONS_DB: Record<string, PermissionDetail> = {
     description: 'Allows the application to access location in the background. Requires explicit user permission in newer Android versions.'
   },
   'android.permission.QUERY_ALL_PACKAGES': {
+    status: 'dangerous',
+    info: 'query all installed applications',
+    description: 'Allows querying the complete package registry on the device. Restricted by Google Play and weaponized by banking trojans to detect target financial apps.'
+  },
+  'android.permission.ACCESS_SUPERUSER': {
+    status: 'dangerous',
+    info: 'root and superuser execution',
+    description: 'Grants root/superuser shell command execution. Used by advanced malware to gain complete privilege escalation over the OS.'
+  },
+  'android.permission.PACKAGE_USAGE_STATS': {
+    status: 'signature',
+    info: 'monitor app usage and foreground tasks',
+    description: 'Special App-Op capability allowing the app to observe active foreground applications. Heavily abused by banking trojans for overlay trigger timing.'
+  },
+  'android.permission.DELETE_PACKAGES': {
+    status: 'signature',
+    info: 'delete installed packages',
+    description: 'Allows deleting installed applications without user confirmation. Restricted to system and signature apps.'
+  },
+  'android.permission.REQUEST_DELETE_PACKAGES': {
+    status: 'dangerous',
+    info: 'request package uninstallation',
+    description: 'Allows prompting package uninstallation dialogs. Used by malware to coerce uninstallation of security suites.'
+  },
+  'android.permission.ENFORCE_UPDATE_OWNERSHIP': {
+    status: 'signature',
+    info: 'enforce update ownership',
+    description: 'Restricted system permission to enforce package update source ownership.'
+  },
+  'android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION': {
+    status: 'signature',
+    info: 'silent package update',
+    description: 'Allows updating packages silently without user interaction.'
+  },
+  'android.permission.MANAGE_EXTERNAL_STORAGE': {
+    status: 'dangerous',
+    info: 'all files access (manage shared storage)',
+    description: 'Special all-files access permission granting broad read/write capabilities across the entire shared filesystem.'
+  },
+  'android.permission.GET_ACCOUNTS': {
+    status: 'dangerous',
+    info: 'retrieve registered accounts',
+    description: 'Allows accessing the list of accounts in the Accounts Service, including Google, email, and banking credentials.'
+  },
+  'android.permission.AUTHENTICATE_ACCOUNTS': {
+    status: 'dangerous',
+    info: 'authenticate system accounts',
+    description: 'Allows the application to act as an account authenticator for the Android AccountManager.'
+  },
+  'android.permission.MANAGE_ACCOUNTS': {
+    status: 'dangerous',
+    info: 'manage system accounts',
+    description: 'Allows the application to add, remove, and modify accounts in the AccountManager.'
+  },
+  'android.permission.USE_CREDENTIALS': {
+    status: 'dangerous',
+    info: 'request authentication authtokens',
+    description: 'Allows the application to request auth tokens from the AccountManager.'
+  },
+  'android.permission.ACCESS_ADSERVICES_AD_ID': {
     status: 'normal',
-    info: 'query all installed packages',
-    description: 'Allows the application to query the full list of installed applications on the device.'
+    info: 'access AdServices advertising identifier',
+    description: 'Standard privacy-preserving advertising identifier access on Android 13+.'
+  },
+  'android.permission.ACCESS_ADSERVICES_ATTRIBUTION': {
+    status: 'normal',
+    info: 'access AdServices attribution measurement',
+    description: 'Standard privacy sandbox attribution measurement on Android 13+.'
+  },
+  'com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE': {
+    status: 'normal',
+    info: 'bind to Play install referrer service',
+    description: 'Standard Google Play install referrer attribution API.'
+  },
+  'com.google.android.c2dm.permission.RECEIVE': {
+    status: 'normal',
+    info: 'receive Firebase cloud messaging (C2DM)',
+    description: 'Allows receiving push notifications and cloud-to-device messages.'
+  },
+  'com.google.android.gms.permission.AD_ID': {
+    status: 'normal',
+    info: 'Google Play Services advertising ID',
+    description: 'Allows accessing Google advertising ID for ad analytics.'
   }
 };
 
@@ -1146,11 +1226,13 @@ export const StaticView: React.FC = () => {
                         const detail = ANDROID_PERMISSIONS_DB[perm] || (() => {
                           const suffix = perm.split('.').pop() || perm;
                           const info = suffix.replace(/_/g, ' ').toLowerCase();
-                          const isDangerous = perm.includes('SMS') || perm.includes('LOCATION') || perm.includes('CAMERA') || perm.includes('CONTACTS') || perm.includes('STORAGE') || perm.includes('INSTALL') || perm.includes('PHONE_STATE') || perm.includes('BLUETOOTH');
+                          const permUpper = perm.toUpperCase();
+                          const isSignature = permUpper.includes('INSTALL_PACKAGES') || permUpper.includes('DELETE_PACKAGES') || permUpper.includes('BIND_ACCESSIBILITY') || permUpper.includes('PACKAGE_USAGE_STATS') || permUpper.includes('UPDATE_PACKAGES') || permUpper.includes('OWNERSHIP');
+                          const isDangerous = permUpper.includes('SMS') || permUpper.includes('LOCATION') || permUpper.includes('CAMERA') || permUpper.includes('CONTACTS') || permUpper.includes('STORAGE') || permUpper.includes('PHONE_STATE') || permUpper.includes('SUPERUSER') || permUpper.includes('ROOT') || permUpper.includes('QUERY_ALL') || permUpper.includes('RECORD_AUDIO') || permUpper.includes('ACCOUNT') || permUpper.includes('CREDENTIAL') || permUpper.includes('SYSTEM_ALERT') || permUpper.includes('OVERLAY') || permUpper.includes('REQUEST_INSTALL');
                           return {
-                            status: isDangerous ? 'dangerous' as const : 'normal' as const,
+                            status: isSignature ? ('signature' as const) : isDangerous ? ('dangerous' as const) : ('normal' as const),
                             info,
-                            description: isDangerous ? 'High-risk capability access.' : 'Standard Android permission.'
+                            description: isSignature ? 'Restricted signature or system-level permission.' : isDangerous ? 'High-risk dangerous permission (accesses sensitive user data/hardware).' : 'Standard Android runtime permission.'
                           };
                         })();
 
