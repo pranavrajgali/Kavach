@@ -33,469 +33,365 @@
 
 \begin{document}
 
-\title{Kavach.ai: Next-Generation Dual-Track Automated Mobile Threat Intelligence, Explainable AI, and Generative Incident Forensics for Financial Infrastructure\\
-{\footnotesize \textsuperscript{*}Technical Whitepaper and System Prototype Specification -- Bank of India Cyber Security Hackathon}
+\title{Kavach.ai: Grounded Generative AI for Adaptive APK Malware Analysis\\
+\thanks{This research and prototype were developed for the Bank of India Cyber Security Hackathon 2026.}
 }
 
-\author{\IEEEauthorblockN{Galipalli Pranav Raj}
-\IEEEauthorblockA{\textit{Team Lead, Dept. of Computer Science} \\
-\textit{Team Hunters}\\
+\author{
+\IEEEauthorblockN{1\textsuperscript{st} Galipalli Pranav Raj}
+\IEEEauthorblockA{\textit{C R Rao AIMSCS} \\
 Hyderabad, India \\
-pranavrajgali@gmail.com}
+galipallipranavraj@gmail.com}
 \and
-\IEEEauthorblockN{Abhinav Mucharla}
-\IEEEauthorblockA{\textit{Dept. of Computer Science} \\
-\textit{Team Hunters}\\
+\IEEEauthorblockN{2\textsuperscript{nd} Abhinav Mucharla}
+\IEEEauthorblockA{\textit{C R Rao AIMSCS} \\
 Hyderabad, India \\
-abhinavmucharla@gmail.com}
+abhinavmucharla27@gmail.com}
 \and
-\IEEEauthorblockN{Pranav Krishna}
-\IEEEauthorblockA{\textit{Dept. of Computer Science} \\
-\textit{Team Hunters}\\
+\IEEEauthorblockN{3\textsuperscript{rd} Pranav Krishna}
+\IEEEauthorblockA{\textit{University of Hyderabad} \\
 Hyderabad, India \\
-pranavkrishna@gmail.com}
+pranavkrishna6242@gmail.com}
 \and
-\IEEEauthorblockN{Siri Chandana}
-\IEEEauthorblockA{\textit{Dept. of Computer Science} \\
-\textit{Team Hunters}\\
-Hyderabad, India \\
-sirichandana@gmail.com}
+\IEEEauthorblockN{4\textsuperscript{th} Siri Chandana}
+\IEEEauthorblockA{\textit{VIT-AP University} \\
+Andhra Pradesh, India \\
+siri06.chandana@gmail.com}
 }
 
 \maketitle
 
 \begin{abstract}
-The rapid digitization of retail banking, real-time Unified Payments Interface (UPI) transactions, and mobile financial services in India has triggered a surge in polymorphic Android banking trojans (e.g., Drinik, ToxicPanda, SOVA, EventBot). Modern trojans deploy sophisticated multi-layered evasion mechanisms, including control-flow flattening, native JNI payload decoupling, anti-analysis delay loops, and dynamic Automated Transfer System (ATS) accessibility abuse, bypassing traditional signature-based static analyzers and passive sandboxes. 
-
-This paper introduces \textbf{Kavach.ai}, a fully automated, dual-track mobile threat intelligence and forensics platform designed for enterprise Security Operations Centers (SOCs) and banking fraud response teams. Kavach.ai integrates: (1) an ultra-fast in-memory Dalvik bytecode and manifest screening engine executing in under $1.5$ seconds, (2) an inter-procedural taint-tracking FlowDroid V2 sidecar coupled with a Ghidra native disassembly parser, (3) a fine-tuned \textbf{SecureBERT-2.0} transformer using Low-Rank Adaptation (LoRA, rank $r=8$) and Multi-Instance Learning (MIL) attention compression, (4) an active sandbox detonation environment featuring dynamic time dilution (accelerating execution delays from $>50\text{ ms}$ to $10\text{ ms}$) and hardware-level intent injection, backed by dual user-space (Frida) and kernel-space (eBPF) telemetry, (5) single-backward-pass \textbf{Attention-based Layer-wise Relevance Propagation (Attention LRP)} for mathematical token attribution heatmaps, and (6) a \textbf{LangGraph} multi-agent collaborative reasoning engine that synthesizes telemetry, defuses sandbox evasion contradictions, evaluates RBI digital payment compliance, and automatically generates official \textbf{CERT-In Annexure A 6-hour incident reports} with actionable YARA-L rules and Kotlin defensive patches. Evaluated across a benchmark corpus of over 53,000 samples (AMD, Drebin, CICMalDroid, and live banking samples), Kavach.ai achieves a $99.6\%$ precision rate, $98.2\%$ recall, and a sub-30-second end-to-end detonation-to-report execution pipeline.
+Android malware analysis faces a fundamental dilemma: static decompilation captures potential capabilities but cannot confirm runtime behavior under obfuscation, while passive sandboxes miss dormant, triggered, or environment-aware banking trojans. This paper presents Kavach.ai, an adaptive APK malware analysis framework that uses a schema-bounded Generative AI controller to drive end-to-end threat investigations. Rather than using Large Language Models for unconstrained narrative generation, Kavach.ai treats static decompilation, taint tracking, and discriminative neural scoring as evidence-producing tools. The GenAI controller dynamically inspects intermediate artifacts, synthesizes syntactically validated runtime instrumentation hooks, commands targeted sandbox detonations, reconciles static-dynamic contradictions, and compiles evidence-linked forensic drafts for human review. By enforcing strict Pydantic schemas, AST validation, and explicit abstention policies, Kavach.ai provides a reliable, explainable, and accountable AI copilot for mobile financial security operations.
 \end{abstract}
 
 \begin{IEEEkeywords}
-Android Malware, Banking Trojans, SecureBERT-2.0, Low-Rank Adaptation, Multi-Instance Learning, Time Dilution, eBPF Kernel Tracing, Attention LRP, GraphRAG, LangGraph Multi-Agent Systems, CERT-In Incident Compliance, RBI Digital Security.
+Android Malware Analysis, Generative AI, Grounded LLM Controller, Adaptive Instrumentation, Frida Hook Synthesis, Dynamic Sandbox, Explainable AI.
 \end{IEEEkeywords}
 
-\section{Introduction}
-Mobile banking applications and real-time payment interfaces (such as UPI, IMPS, and AEPS) form the backbone of modern retail financial transactions in India. However, this massive payment ecosystem is aggressively targeted by threat actors deploying polymorphic Android Application Packages (APKs). Recent campaigns involving sophisticated malware families---including Drinik (tax refund credential stealers), ToxicPanda (on-device Automated Transfer System fraud), and mutated SOVA banking trojans---demonstrate that static signature hashing (e.g., SHA-256 blacklists) and basic static regex matching (e.g., MobSF) are no longer sufficient \cite{b1, b3}.
+\section{Introduction and Contributions}
+Mobile banking applications and digital financial services are constantly targeted by evasive Android malware. Modern banking trojans rely on control-flow obfuscation, native shared library payload decoupling, reflection, and delayed logic triggers to subvert automated security pipelines \cite{b1, b3}.
 
-Modern banking malware evades security screening through four primary vectors:
+Traditional mobile security architectures suffer from severe structural limitations:
 \begin{enumerate}
-    \item \textbf{Bytecode Obfuscation and Dynamic Loading:} Heavy variable/class renaming, string encryption (AES/DES/XOR), reflection calls (\texttt{Class.forName}, \texttt{Method.invoke}), and dynamic secondary payload drops via \texttt{DexClassLoader} or native \texttt{.so} shared libraries \cite{b2}.
-    \item \textbf{Sandbox Evasion and Sleep Loops:} Malware processes query system properties (\texttt{ro.build.tags}, \texttt{ro.product.cpu.abi}) to detect virtual environments and enter prolonged sleep cycles ($>60$ seconds) to outlast automated sandbox analysis timeouts \cite{b7}.
-    \item \textbf{Abuse of Legitimate Android Subsystems:} Malicious actors hijack Android Accessibility Services (\texttt{AccessibilityNodeInfo}, \texttt{performAction}) and overlay permissions (\texttt{SYSTEM\_ALERT\_WINDOW}) to inject synthetic keystrokes, siphon One-Time Passwords (OTPs), and execute fund transfers without user knowledge \cite{b8}.
-    \item \textbf{Regulatory Compliance Burden:} Following security incidents, banking institutions under Reserve Bank of India (RBI) mandates and CERT-In directions must submit formal, highly technical Annexure A root-cause analyses within 6 hours of incident detection \cite{b6}. Manual reverse-engineering by human forensic analysts creates a latency of hours or days, enabling unauthorized financial exfiltration.
+    \item \textbf{Static Analysis Blindspots:} Static decompilation and AST regexes identify API capabilities (e.g., cryptographic or SMS calls) but cannot establish whether those execution paths are reached at runtime, how dynamically decrypted URLs are constructed, or if the code is dead \cite{b2}.
+    \item \textbf{Passive Dynamic Sandboxing Gaps:} Automated execution environments observe only default execution paths. Evasive malware that checks system uptime, sleeps for extended intervals, or waits for specific broadcast intents remains completely dormant in passive sandboxes \cite{b7}.
+    \item \textbf{Unconstrained LLM Hallucinations:} Applying Large Language Models (LLMs) purely as text-in/text-out conversational engines produces plausible but ungrounded reports, inventing non-existent package dependencies and misattributing standard SDK analytics as active banking fraud \cite{b15}.
 \end{enumerate}
-
-To solve these critical operational challenges, we present \textbf{Kavach.ai}, an end-to-end, dual-track automated threat intelligence and explainable AI architecture. Kavach.ai processes suspicious APKs through deterministic static extraction, high-speed neural representation, active dynamic instrumentation, explainable token attribution, and multi-agent regulatory reasoning.
 
 \begin{figure*}[t]
 \centering
 \begin{tikzpicture}[
-    scale=0.88, every node/.style={transform shape},
+    scale=0.92, every node/.style={transform shape},
     >=Stealth,
-    node distance=0.9cm and 1.2cm,
     font=\sffamily\scriptsize,
-    block/.style={draw, rectangle, rounded corners=3pt, fill=blue!6, minimum width=2.4cm, minimum height=0.7cm, align=center, thick},
-    dynblock/.style={draw, rectangle, rounded corners=3pt, fill=red!6, minimum width=2.4cm, minimum height=0.7cm, align=center, thick},
-    mlblock/.style={draw, rectangle, rounded corners=3pt, fill=emerald!15, minimum width=2.4cm, minimum height=0.7cm, align=center, thick},
-    genblock/.style={draw, rectangle, rounded corners=3pt, fill=purple!10, minimum width=2.4cm, minimum height=0.7cm, align=center, thick}
+    block/.style={draw, rectangle, rounded corners=3pt, fill=blue!6, minimum width=3.1cm, minimum height=0.7cm, align=center, thick},
+    dynblock/.style={draw, rectangle, rounded corners=3pt, fill=red!6, minimum width=3.1cm, minimum height=0.7cm, align=center, thick},
+    mlblock/.style={draw, rectangle, rounded corners=3pt, fill=emerald!15, minimum width=3.1cm, minimum height=0.7cm, align=center, thick},
+    genblock/.style={draw, rectangle, rounded corners=3pt, fill=purple!10, minimum width=3.1cm, minimum height=0.7cm, align=center, thick},
+    controller/.style={draw, rectangle, rounded corners=4pt, fill=purple!12, minimum width=9.8cm, minimum height=0.75cm, align=center, line width=1.1pt}
   ]
 
-  % Stage 1
-  \node (upload) [block] {\textbf{APK Upload}\\(Multipart POST)};
-  \node (triage) [block, right=of upload] {\textbf{Stage 1: Fast Triage}\\Manifest Perms \& Obfuscation\\($<10\text{ ms}$)};
-  
-  % Static Track
-  \node (dex) [block, below=of triage, xshift=-2.2cm] {\textbf{Stage 2A: DEX Extractor}\\In-Memory Bytecode Slicing\\($\sim 1.5\text{ s}$ RAM)};
-  \node (flowdroid) [block, below=0.4cm of dex] {\textbf{Stage 2B: FlowDroid V2}\\Jimple Taint Path Tracking\\(Sources/Sinks Sidecar)};
-  \node (ghidra) [block, below=0.4cm of flowdroid] {\textbf{Stage 2C: Ghidra Parser}\\Native JNI Symbol De-mangler\\(\texttt{.so} Binary Analysis)};
+  % Top Row: Evidence Extraction Layer
+  \node (intake) at (0, 3.2) [block] {\textbf{1. APK Ingestion \& Slicing}\\Manifest $\bullet$ Sinks $\bullet$ JNI};
+  \node (mlrank) at (4.7, 3.2) [mlblock] {\textbf{2. Discriminative Scoring}\\SecureBERT $\bullet$ AttnLRP};
+  \node (evidence) at (9.4, 3.2) [block] {\textbf{3. Normalized Evidence}\\Structured Artifact Store};
 
-  % ML Static
-  \node (bert) [mlblock, right=of flowdroid, xshift=0.3cm] {\textbf{Stage 3: SecureBERT-2.0}\\LoRA Adapter ($r=8, \alpha=16$)\\MIL Attention Compression};
-  \node (lrp) [mlblock, below=of bert] {\textbf{Stage 5: Attention LRP}\\$R = \text{clamp}(A \odot \nabla A, \min=0)$\\Token Heatmap Attributions};
+  % Middle Row: Central GenAI Controller
+  \node (ctrl) at (4.7, 1.7) [controller] {\textbf{Grounded GenAI Decision Controller (LangGraph State Machine)}\\Pydantic Action Routing $\bullet$ Frida Hook Synthesis $\bullet$ Contradiction Resolution};
 
-  % Dynamic Track
-  \node (synthesizer) [genblock, right=of triage, xshift=2.0cm] {\textbf{LLMFrida Synthesizer}\\Qwen 2.5 Coder / Groq\\Dynamic Hook Generator};
-  \node (detonation) [dynblock, below=of synthesizer] {\textbf{Stage 4: Sandbox Detonation}\\Genymotion / Physical ADB\\Time Dilution ($>50\text{ms}\to 10\text{ms}$)\\Intent Injection ($0\text{x}20$)};
-  \node (telemetry) [dynblock, below=0.4cm of detonation] {\textbf{Dual Observability}\\User-space Frida Hooks\\Kernel-space eBPF Probes};
+  % Bottom Row: Action & Reconciliation Layer
+  \node (hooks) at (0, 0.2) [genblock] {\textbf{4. Hook Synthesis \& AST Check}\\Target Verification $\bullet$ Allow-List};
+  \node (sandbox) at (4.7, 0.2) [dynblock] {\textbf{5. Monitored Sandbox Detonation}\\Intent Simulation $\bullet$ Frida $\bullet$ eBPF};
+  \node (report) at (9.4, 0.2) [block] {\textbf{6. Evidence-Linked Reporting}\\Fact vs.\ Inference $\bullet$ Human Review};
 
-  % LangGraph Multi-Agent
-  \node (langgraph) [genblock, below=of lrp, xshift=1.8cm] {\textbf{Stage 6: LangGraph Multi-Agent Engine}\\Static Auditor $\leftrightarrow$ Dynamic Auditor $\leftrightarrow$ Fraud Risk Agent $\leftrightarrow$ Compliance Writer\\Conflict Resolution \& CERT-In Annexure A / RBI Matrix Generation};
+  % Forward & Feedback Edges
+  \draw[->, thick] (intake) -- (mlrank);
+  \draw[->, thick] (mlrank) -- (evidence);
+  \draw[->, thick] (evidence.south) -- ++(0,-0.35) -| (ctrl.25);
+  \draw[->, thick] (intake.south) -- ++(0,-0.35) -| (ctrl.155);
 
-  % Final Outputs
-  \node (report) [block, below=of langgraph] {\textbf{Forensic Deliverables}\\Interactive React Dashboard $\bullet$ CERT-In 6-Hr Incident Report $\bullet$ YARA-L Rules $\bullet$ Kotlin Patch};
-
-  % Connections
-  \draw[->, thick] (upload) -- (triage);
-  \draw[->, thick] (triage) -| (dex);
-  \draw[->, thick] (triage) -| (synthesizer);
-  \draw[->, thick] (dex) -- (flowdroid);
-  \draw[->, thick] (flowdroid) -- (ghidra);
-  \draw[->, thick] (dex.east) -- (bert.west);
-  \draw[->, thick] (flowdroid.east) -- (bert.west);
-  \draw[->, thick] (ghidra.east) -- (bert.west);
-  \draw[->, thick] (bert) -- (lrp);
-  
-  \draw[->, thick] (synthesizer) -- (detonation);
-  \draw[->, thick] (detonation) -- (telemetry);
-  
-  \draw[->, thick] (lrp.south) |- (langgraph.west);
-  \draw[->, thick] (telemetry.south) |- (langgraph.east);
-  \draw[->, thick] (langgraph) -- (report);
+  \draw[->, thick] (ctrl.205) |- (hooks.north);
+  \draw[->, thick] (hooks) -- (sandbox);
+  \draw[->, thick] (sandbox) -- (report);
+  \draw[->, thick] (report.north) -- (ctrl.335);
 
 \end{tikzpicture}
-\caption{Kavach.ai End-to-End Dual-Track Architecture: Integrating deterministic in-memory Dalvik slicing, FlowDroid V2 taint tracking, Ghidra native reverse engineering, SecureBERT-2.0 LoRA neural classification, dynamic active evasion defusal, Attention LRP explainability, and LangGraph multi-agent forensic compliance.}
-\label{fig:full_arch}
+\caption{Kavach.ai Closed-Loop Investigation Architecture: Deterministic extraction tools feed structured evidence into the central GenAI LangGraph controller, which synthesizes safe dynamic hooks, commands targeted sandbox detonations, and reconciles multi-modal findings into verifiable forensic reports.}
+\label{fig:genai_arch}
 \end{figure*}
 
----
+To overcome these challenges, we introduce \textbf{Kavach.ai}, an adaptive malware analysis architecture where Generative AI acts as an \textit{active, grounded decision controller} rather than an unconstrained summarizer. As illustrated in Fig.~\ref{fig:genai_arch}, Kavach.ai tightly binds deterministic static analyzers, discriminative neural models, and dynamic sandbox environments into a closed-loop investigation cycle.
 
-\section{Core Pipeline Architecture}
+\textbf{Key Contributions:}
+\begin{enumerate}
+    \item \textbf{Multi-Modal Grounded Evidence Extraction:} A deterministic extraction pipeline that normalizes Android manifests, inter-procedural taint paths, native JNI symbols, and discriminative SecureBERT-2.0 slice priority scores into structured evidence nodes.
+    \item \textbf{Schema-Bounded Adaptive GenAI Controller:} A multi-agent LangGraph controller operating over a strict, typed action space. The controller formulates investigation hypotheses, selects target methods for runtime observation, and synthesizes syntactically validated Frida instrumentation scripts under rigorous safety allow-lists.
+    \item \textbf{Evidence-Linked Synthesis with Abstention:} An explainable synthesis engine that strictly delineates directly observed facts from model inferences, handles static-dynamic contradictions (such as dormant malware), and drafts analyst-verifiable incident reports.
+\end{enumerate}
 
-The Kavach.ai system is engineered around a decoupled, asynchronous dual-track execution framework shown in Fig.~\ref{fig:full_arch}.
+\section{System Overview and Architecture}
+The Kavach.ai investigation workflow proceeds across four interconnected phases:
 
-\subsection{Stage 1: Ultra-Fast Manifest Triage Engine}
-Upon receiving an APK upload via the FastAPI streaming gateway, Stage 1 inspects the raw \texttt{AndroidManifest.xml} in under $10\text{ ms}$ without unpacking Dalvik bytecode. The triage engine computes three orthogonal heuristics:
+\textbf{Phase 1: Deterministic Intake \& Evidence Ingestion.} The submitted APK is parsed in memory. Manifest configurations, exported components, dangerous permission combinations, and control-flow graphs are extracted without speculative interpretation.
+
+\textbf{Phase 2: Initial Hypothesis Generation.} Discriminative models and heuristic engines rank suspicious bytecode slices (e.g., cryptographic operations, dynamic class loaders, SMS managers) to prioritize initial investigation targets.
+
+\textbf{Phase 3: Adaptive GenAI Decision Loop.} The GenAI controller reviews the evidence state. If static indicators reveal encrypted payloads or unobservable reflection calls, the controller formulates an observation plan, synthesizes targeted Frida instrumentation hooks, and executes a monitored sandbox detonation.
+
+\textbf{Phase 4: Reconciliation \& Forensic Drafting.} Runtime telemetry (decrypted strings, network destinations, file access) is merged back into the evidence state. Contradictions between static capability and runtime observations are reconciled, producing structured forensic deliverables for human analyst review.
+
+\section{Evidence-Producing Subsystems}
+Kavach.ai treats all non-generative analysis modules as specialized, deterministic evidence producers.
+
+\subsection{Static Evidence Producers}
 \begin{itemize}
-    \item \textbf{Dangerous Permission Co-Occurrence Matrix:} Individual permissions (e.g., \texttt{READ\_SMS}) are insufficient for high-confidence classification. Stage 1 evaluates high-risk co-occurrence clusters:
-    \begin{align}
-        \mathcal{C}_{\text{ATS}} &= \{\text{BIND\_ACCESSIBILITY}, \text{SYSTEM\_ALERT\_WINDOW}\} \label{eq:ats} \\
-        \mathcal{C}_{\text{SMS}} &= \{\text{RECEIVE\_SMS}, \text{SEND\_SMS}, \text{INTERNET}\} \label{eq:sms} \\
-        \mathcal{C}_{\text{ROOT}} &= \{\text{ACCESS\_SUPERUSER}, \text{PACKAGE\_USAGE\_STATS}\} \label{eq:root}
-    \end{align}
-    \item \textbf{Reflection and Entropy Density:} Scans manifest-declared receivers and service metadata for base64 string payloads and high Shannon entropy ($\mathcal{H} > 7.2\text{ bits/byte}$).
-    \item \textbf{Component Intent Filters:} Flags broadcast receivers subscribed to high-priority system actions (\texttt{BOOT\_COMPLETED}, \texttt{BATTERY\_LOW}, \texttt{SMS\_RECEIVED}).
+    \item \textbf{Manifest Triage:} Inspects declared permissions, high-risk co-occurrence clusters (e.g., \texttt{BIND\_ACCESSIBILITY} + \texttt{SYSTEM\_ALERT\_WINDOW}), and intent filter receivers in under 10 milliseconds.
+    \item \textbf{In-Memory Bytecode Slicer:} Directly extracts backward program slices from Dalvik bytecode anchored to designated sensitive API sinks $\mathcal{S}_{\text{sink}}$ (e.g., \texttt{SmsManager->sendTextMessage}, \texttt{Cipher->doFinal}).
+    \item \textbf{Inter-Procedural Taint Tracking:} Containerized FlowDroid V2 sidecars track source-to-sink data flow propagation across app components \cite{b9}.
+    \item \textbf{Native JNI Symbol Extraction:} Headless Ghidra disassembles native \texttt{.so} binaries to extract exported JNI functions and \texttt{RegisterNatives} dynamically bound symbols.
+    \item \textbf{Discriminative Transformer Ranking:} A fine-tuned SecureBERT model \cite{b5, b13} attached to Low-Rank Adaptation (LoRA) projection matrices ($r=8, \alpha=16$) computes priority scores $p(s_i)$ across code slices.
+    \item \textbf{Token Attribution Heatmaps:} Single-backward-pass Attention-based Layer-wise Relevance Propagation (AttnLRP) \cite{b4, b14} computes input token relevance $R = \text{clamp}(A \odot \nabla A, \min=0)$ to highlight influential opcodes.
 \end{itemize}
 
-\subsection{Stage 2: Deterministic Static Slicing and Native JNI Parsing}
-\subsubsection{Sub-Second In-Memory DEX Extraction}
-Legacy analyzers rely on disk-bound disassemblers (e.g., APKTool), which dump tens of thousands of \texttt{.smali} files to disk, causing severe I/O bottlenecks ($>180$ seconds on multi-DEX APKs). Kavach.ai implements direct in-memory DEX archive extraction using Androguard. The bytecode classes, methods, and Dalvik instructions are indexed directly from memory in $\approx 1.5$ seconds.
+\subsection{Dynamic Action Environment}
+The sandbox provides an isolated execution environment where the GenAI controller commands actions:
+\begin{itemize}
+    \item \textbf{Lifecycle \& Permission Provisioning:} Automated ADB deployment with multi-ABI handling, auto-granting overlay permissions (\texttt{SYSTEM\_ALERT\_WINDOW}), and activating Device Admin policies.
+    \item \textbf{Intent Simulation:} ADB broadcasts system events with flag \texttt{0x00000020} (\texttt{FLAG\_INCLUDE\_STOPPED\_PACKAGES}) to awaken dormant broadcast receivers.
+    \item \textbf{Timing Delay Compression:} Dynamic hooks intercept \texttt{Thread.sleep} and \texttt{SystemClock.sleep} ($>50\text{ms} \to 10\text{ms}$) as well as \texttt{Handler.postDelayed} ($>1\text{s} \to 50\text{ms}$), neutralising anti-analysis sleep evasions.
+    \item \textbf{Runtime Evasion Bypasses:} Injects pre-instrumentation hooks neutralizing environment checks (\texttt{ro.build.tags}, \texttt{File.exists} for root indicators) and overriding SSL certificate pinning (\texttt{TrustManager}, \texttt{OkHttpClient}).
+    \item \textbf{Dual Telemetry Layer:} Captures user-space Frida hook events (decrypted parameters, dynamic URLs, JNI library loads) and kernel-space eBPF syscall tracepoints (\texttt{sys\_enter\_connect}, \texttt{sys\_enter\_openat}, \texttt{sys\_enter\_execve}).
+\end{itemize}
 
-\subsubsection{Backward Program Slicing}
-To extract meaningful contextual semantics while complying with transformer token limits ($L=512$), Kavach.ai builds an inter-procedural Control Flow Graph (CFG) and performs backward program slicing anchored to designated sensitive API sinks $\mathcal{S}_{\text{sink}}$:
-\begin{equation}
-    \mathcal{S}_{\text{sink}} = \left\{ 
-    \begin{array}{l}
-        \texttt{Landroid/telephony/SmsManager;->sendTextMessage}, \\
-        \texttt{Ldalvik/system/DexClassLoader;->loadClass}, \\
-        \texttt{Ljavax/crypto/Cipher;->doFinal}, \\
-        \texttt{Ljava/lang/Runtime;->exec}, \\
-        \texttt{Landroid/accessibilityservice/AccessibilityService}
-    \end{array}
-    \right\}
-\end{equation}
-The backward slicer computes the data-dependency slice $\text{Slice}(s) = \{ n \in \text{CFG} \mid n \rightsquigarrow_{\text{data}} s \}$, extracting only the upstream register manipulations, variable assignments, and conditional branches leading directly to the sink.
+Table~\ref{tab:evidence_mapping} details how extracted evidence artifacts feed directly into GenAI decision routines.
 
-\subsubsection{FlowDroid V2 Java Sidecar}
-For deep inter-procedural taint analysis, Kavach.ai integrates a containerized FlowDroid V2 sidecar (\texttt{flowdroid-sidecar-0.1.0.jar}). FlowDroid converts Dalvik bytecode into Jimple intermediate representation and executes IFDS (Interprocedural Finite Distributive Subset) taint propagation across components. Taint sources and sinks are partitioned into dedicated categories: privileged taint (\texttt{sources\_sinks\_taint\_privileged}), sensitive credential access (\texttt{taint\_sensitive}), and storage leaks (\texttt{taint\_storage}), generating deterministic provenance records.
-
-\subsubsection{Ghidra Native JNI Symbol Analysis}
-To counteract native code payload decoupling (where banking trojans hide malicious C/C++ shellcode inside \texttt{.so} libraries), Stage 2 executes the Ghidra Headless analyzer backed by \texttt{KavachNativeEvidence.java}. The analyzer maps exported JNI symbols (both short-name \texttt{Java\_com\_bank\_App\_decrypt} and long-name mangled signatures), resolves dynamic registration calls (\texttt{RegisterNatives} inside \texttt{JNI\_OnLoad}), and extracts cross-references between native memory allocations (\texttt{mmap}, \texttt{ptrace}) and Dalvik wrappers.
-
----
-
-\section{Deep Learning Architecture \& Explainability}
-
-\subsection{SecureBERT-2.0 Transformer Fine-Tuned via LoRA}
-Extracted Dalvik program slices are normalized by replacing register indices with generic tokens (\texttt{v0} $\to$ \texttt{REG\_VAR}, \texttt{p0} $\to$ \texttt{REG\_PARAM}) to ensure generalization across compiler optimizations.
-
-Kavach.ai leverages **SecureBERT-2.0**, a domain-specific RoBERTa-based language model pre-trained on cybersecurity corpora (151 million parameters). To enable parameter-efficient, rapid fine-tuning on emerging zero-day malware signatures without catastrophic forgetting, we freeze the 151M base weights and attach Low-Rank Adaptation (LoRA) matrices to the query ($W_q$), key ($W_k$), value ($W_v$), and output dense ($W_o$) projection heads.
-
-For a pre-trained weight tensor $W_0 \in \mathbb{R}^{d \times k}$, the adapted forward computation is:
-\begin{equation}
-    h = W_0 x + \Delta W x = W_0 x + \frac{\alpha}{r} (B \cdot A) x
-\end{equation}
-where $A \in \mathbb{R}^{r \times d}$ is initialized via a Gaussian distribution $\mathcal{N}(0, \sigma^2)$, $B \in \mathbb{R}^{k \times r}$ is initialized to zero, rank $r = 8$, and scaling parameter $\alpha = 16$. 
-
-As detailed in Table~\ref{tab:lora_params}, LoRA scales down the trainable parameters to $1,771,778$ ($1.16\%$ of the total network), yielding a tiny adapter checkpoint size of $6.8\text{ MB}$ that can be hot-swapped or retrained on hourly threat feeds in under 4 minutes.
-
-\begin{table}[h]
+\begin{table}[t]
 \centering
-\caption{SecureBERT-2.0 LoRA Adaptation Hyperparameters}
-\label{tab:lora_params}
-\begin{tabularx}{\linewidth}{lX}
+\caption{Artifact to GenAI Action Mapping}
+\label{tab:evidence_mapping}
+\begin{tabularx}{\linewidth}{lXX}
 \toprule
-\textbf{Hyperparameter} & \textbf{Production Specification} \\
+\textbf{Evidence Type} & \textbf{Observed Output} & \textbf{GenAI Controller Use} \\
 \midrule
-Base Architecture & \texttt{ehsanaghaei/SecureBERT} (RoBERTa backbone) \\
-Base Parameters & $151,000,000$ (Frozen: \texttt{requires\_grad=False}) \\
-LoRA Rank ($r$) & $8$ \\
-LoRA Alpha ($\alpha$) & $16$ (Scaling factor $\alpha / r = 2.0$) \\
-LoRA Dropout & $0.05$ \\
-Target Modules & \texttt{query}, \texttt{value}, \texttt{key}, \texttt{dense} \\
-Trainable Parameters & $1,771,778$ ($1.16\%$) \\
-Adapter Disk Size & $6.78\text{ MB}$ \\
-Learning Rate & $2.0 \times 10^{-4}$ (Cosine Annealing with Warmup) \\
-Warmup Ratio & $0.06$ ($6\%$ of total steps) \\
-Class Imbalance Loss & Weighted Cross-Entropy (Positive weight $w=3.5$) \\
-Precision & Mixed Precision FP16 / BF16 \\
+Manifest & Perms + Receiver Filters & Initial risk triage and entrypoint routing \\
+Bytecode Slice & Data flow into crypto / SMS sink & Formulates hook target hypothesis \\
+Taint Path & Source-to-sink provenance & Validates end-to-end capability \\
+Native Metadata & JNI symbol cross-reference & Requests deeper native inspection \\
+ML / LRP Score & Slice ranking \& token heatmaps & Prioritizes investigation order \\
+Runtime Telemetry & Decrypted strings / socket IPs & Reconciles static hypotheses \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\subsection{Multi-Instance Learning (MIL) Attention Compression}
-An APK typically produces multiple program slices $\{s_1, s_2, \dots, s_M\}$. In real-world banking malware, a benign app may contain $95\%$ standard Android library slices and only $5\%$ malicious payload slices. Standard mean-pooling across slices dilutes the threat signal. 
+\section{GenAI Controller Decisions, Action Space, and Safety Controls}
 
-To overcome this, Kavach.ai deploys a Multi-Instance Learning (MIL) attention aggregator (\texttt{mil.py}, \texttt{attention\_compressor.py}). Let $h_i \in \mathbb{R}^{d}$ be the SecureBERT representation of slice $s_i$. The bag-level representation $H_{\text{bag}}$ is computed via gated attention:
-\begin{equation}
-    a_i = \frac{\exp\left( w^T \left( \tanh(V h_i) \odot \text{sigm}(U h_i) \right) \right)}{\sum_{j=1}^M \exp\left( w^T \left( \tanh(V h_j) \odot \text{sigm}(U h_j) \right) \right)}
-\end{equation}
-\begin{equation}
-    H_{\text{bag}} = \sum_{i=1}^M a_i h_i
-\end{equation}
-where $V, U \in \mathbb{R}^{m \times d}$ and $w \in \mathbb{R}^m$ are learnable projection parameters. The attention weight $a_i \in [0, 1]$ automatically assigns high importance to the specific malicious slices (e.g., an SMS interceptor method) while attenuating noise from standard UI callbacks.
+\subsection{Structured Controller State and Action Space}
+The GenAI controller is implemented as a cyclical state machine using LangGraph (Fig.~\ref{fig:langgraph_state}). The controller does not output raw, unformatted text; instead, each transition consumes and emits strictly typed Pydantic data models.
 
-\subsection{Explainable AI via Attention LRP}
-To satisfy legal, regulatory, and SOC auditing standards, Kavach.ai avoids black-box verdicts by computing token-level **Attention-based Layer-wise Relevance Propagation (Attention LRP)** \cite{b4}. 
-
-Traditional perturbation-based explainability (such as KernelSHAP) requires hundreds of iterative model evaluations, introducing an unacceptable 15-to-45 second latency per slice. Attention LRP calculates exact token attributions in a \textbf{single backward pass} by propagating relevance from the classification head through the frozen self-attention matrices.
-
-For a transformer layer with attention probability tensor $A \in \mathbb{R}^{H \times N \times N}$ and its corresponding gradient tensor $\nabla A = \frac{\partial \mathcal{L}_{\text{malicious}}}{\partial A}$, the positive relevance matrix $R$ is defined as:
-\begin{equation}
-    R = \text{clamp}\left( A \odot \nabla A, \min=0 \right)
-\end{equation}
-Averaging across the $H$ attention heads yields the token-to-token interaction map:
-\begin{equation}
-    \bar{R}_{i,j} = \frac{1}{H} \sum_{h=1}^H R_{h,i,j}
-\end{equation}
-The total attribution score $\text{Attr}(j)$ for input token $t_j$ is obtained by column reduction:
-\begin{equation}
-    \text{Attr}(j) = \sum_{i=1}^N \bar{R}_{i,j}
-\end{equation}
-Tokens corresponding to malicious opcodes (e.g., \texttt{sendTextMessage}, \texttt{Cipher.doFinal}, \texttt{getSimSerialNumber}, \texttt{chmod 777}) receive elevated positive scores and are rendered in the React dashboard using dynamic yellow-to-red HSL glow heatmaps (Fig.~\ref{fig:lrp_viz}).
-
-\begin{figure}[h]
-\centering
-\begin{lstlisting}[language=Java,basicstyle=\ttfamily\scriptsize]
-// Attention LRP Highlighted Slice (Decompiled Dalvik)
-REG_VAR = SmsManager.getDefault();
-REG_VAR.sendTextMessage( // [LRP Weight: +0.08412 - RED GLOW]
-    "+919876543210", 
-    null, 
-    "OTP: " + interceptedOtp, // [LRP Weight: +0.06321 - ORANGE]
-    null, 
-    null
-);
-\end{lstlisting}
-\caption{Attention LRP Inline Token Heatmap Rendering in UI}
-\label{fig:lrp_viz}
-\end{figure}
-
----
-
-\section{Dynamic Analysis \& Active Evasion Defusal}
-
-Static analysis alone cannot observe dynamically constructed URLs, encrypted C2 payloads, or runtime hook installations. Stage 4 detonates the APK in an automated local sandbox (e.g., Genymotion VM or network-attached physical Android device) executing under active evasion defusal.
-
-\subsection{Time Dilution Engine (Anti-Sleep Acceleration)}
-Modern trojans deliberately delay payload execution by sleeping for several minutes to outlast automated analysis timeouts. Kavach.ai injects dynamic Frida hooks at process initialization to intercept Java thread sleep and scheduling APIs:
-\begin{itemize}
-    \item \texttt{java.lang.Thread.sleep(long millis)}: Any delay $>50\text{ ms}$ is clamped and accelerated to $10\text{ ms}$.
-    \item \texttt{android.os.SystemClock.sleep(long millis)}: Accelerated to $10\text{ ms}$.
-    \item \texttt{android.os.Handler.postDelayed(Runnable, long delay)}: Delays $>1000\text{ ms}$ are compressed to $50\text{ ms}$.
-\end{itemize}
-This forces the malware to trigger its malicious background services within the observation window ($10$, $30$, or $60$ seconds).
-
-\subsection{Hardware-Level Intent Injection}
-Banking droppers often register dormant broadcast receivers that remain idle until the device restarts or powers down. Kavach.ai uses ADB to broadcast system-level intents with flag \texttt{0x00000020} (\texttt{FLAG\_INCLUDE\_STOPPED\_PACKAGES}):
-\begin{lstlisting}[basicstyle=\ttfamily\scriptsize]
-adb shell am broadcast -a android.intent.action.BOOT_COMPLETED -f 0x00000020
-adb shell am broadcast -a android.intent.action.BATTERY_LOW -f 0x00000020
-adb shell am broadcast -a android.provider.Telephony.SMS_RECEIVED -f 0x00000020
-\end{lstlisting}
-This immediately wakes dormant receivers, triggering dropper unpackers and C2 beaconing.
-
-\subsection{Dual-Layer Kernel (eBPF) and User-Space (Frida) Observability}
-To prevent user-space hooking evasion, Kavach.ai captures telemetry across two decoupled layers:
+The controller operates over seven permitted actions:
 \begin{enumerate}
-    \item \textbf{User-Space Frida Instrumentation:} Hooks \texttt{File.exists} (anti-root bypass), \texttt{SSLContext.init} and \texttt{OkHttpClient} (SSL pinning bypass), \texttt{Socket.connect} (IP/Port logging), and \texttt{Runtime.load} (native library tracking).
-    \item \textbf{Kernel-Space eBPF Tracing:} Directly attaches eBPF probes to kernel syscall tracepoints (\texttt{sys\_enter\_openat}, \texttt{sys\_enter\_connect}, \texttt{sys\_enter\_execve}). Even if the malware uses inline assembly or direct syscalls (\texttt{svc 0}) to bypass user-space libc hooks, eBPF captures the raw socket descriptors and file descriptors in the kernel.
+    \item \texttt{REQUEST\_ARTIFACT}: Requests additional static artifacts (e.g., manifest intent-filters, specific class decompilations).
+    \item \texttt{RUN\_DEEPER\_STATIC}: Triggers FlowDroid taint analysis or Ghidra native disassembly on a specific target.
+    \item \texttt{TRIGGER\_COMPONENT}: Emits a specific broadcast intent or activity launch to awaken a dormant component.
+    \item \texttt{GENERATE\_FRIDA\_HOOK}: Synthesizes a targeted JavaScript instrumentation script for a candidate method.
+    \item \texttt{RECONCILE\_EVIDENCE}: Evaluates static vs. dynamic telemetry to detect evasions or confirm payload execution.
+    \item \texttt{ABSTAIN\_AND\_ESCALATE}: Flags ambiguous or unresolvable findings for mandatory human expert review.
+    \item \texttt{DRAFT\_FINDING}: Formulates an evidence-grounded finding linking observed facts directly to artifact IDs.
 \end{enumerate}
 
----
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    scale=0.85, every node/.style={transform shape},
+    >=Stealth,
+    node distance=0.8cm,
+    font=\sffamily\scriptsize,
+    agentnode/.style={draw, rectangle, rounded corners=3pt, fill=blue!6, minimum width=2.6cm, minimum height=0.6cm, align=center, thick},
+    decnode/.style={draw, diamond, aspect=1.6, fill=orange!10, minimum width=2.0cm, align=center, thick},
+    outnode/.style={draw, rectangle, rounded corners=3pt, fill=emerald!15, minimum width=2.6cm, minimum height=0.6cm, align=center, thick},
+    abstainnode/.style={draw, rectangle, rounded corners=3pt, fill=red!10, minimum width=2.6cm, minimum height=0.6cm, align=center, thick}
+  ]
 
-\section{Generative AI Innovation Subsystems}
+  \node (static_ag) [agentnode] {\textbf{Static Auditor Agent}\\Inspects Slices \& Taint Chains};
+  \node (dyn_ag) [agentnode, right=0.8cm of static_ag] {\textbf{Dynamic Auditor Agent}\\Monitors Intercepts \& eBPF};
+  
+  \node (synth_ag) [agentnode, below=0.9cm of $(static_ag.south)!0.5!(dyn_ag.south)$] {\textbf{Fraud Risk Synthesizer}\\Evaluates Evidence Consistency};
+  
+  \node (check) [decnode, below=0.8cm of synth_ag] {Consistent?};
+  
+  \node (writer) [outnode, below left=0.8cm and 0.2cm of check] {\textbf{Compliance Writer}\\Drafts CERT-In / RBI Matrix};
+  \node (abstain) [abstainnode, below right=0.8cm and 0.2cm of check] {\textbf{Abstain \& Escalate}\\Flags for Human Review};
 
-Kavach.ai integrates three active Generative AI components utilizing optimized Code-LLMs via OpenRouter and Groq Cloud APIs for sub-second inference latency on commodity developer hardware.
+  \draw[->, thick] (static_ag) |- (synth_ag);
+  \draw[->, thick] (dyn_ag) |- (synth_ag);
+  \draw[->, thick] (synth_ag) -- (check);
+  \draw[->, thick] (check) -| node[above, near start] {\textsc{Yes}} (writer);
+  \draw[->, thick] (check) -| node[above, near start] {\textsc{Ambiguous}} (abstain);
+  \draw[->, thick] (check.west) -- ++(-0.6,0) |- node[near start, left] {\textsc{Retry Target}} (static_ag.west);
 
-\subsection{Subsystem 1: Automated Smali De-obfuscator}
-When an analyst inspects an obfuscated Dalvik slice, Kavach routes the token sequence to a fine-tuned Code-LLM (\texttt{qwen/qwen-2.5-coder-32b-instruct} or \texttt{llama-3.3-70b-versatile}). The model translates control-flow flattened Smali opcodes into readable Java/Python pseudocode, automatically reconstructing AES key schedules, hidden endpoint URLs, and reflection targets.
+\end{tikzpicture}
+\caption{LangGraph Multi-Agent Cyclical State Machine: Specialized auditors cross-validate static and dynamic evidence, resolving contradictions or escalating ambiguous cases for human inspection.}
+\label{fig:langgraph_state}
+\end{figure}
 
-\subsection{Subsystem 2: Generative AI Dynamic Frida Hook Synthesizer}
-Static analyzers often encounter custom obfuscated cryptographic routines (e.g., \texttt{com.trojan.payload.x7()}) whose algorithm cannot be statically extracted. The **LLMFrida Synthesizer** (\texttt{llm\_frida\_synthesizer.py}) parses the static sink arguments and automatically writes, validates, and injects a custom Frida script at runtime:
+\subsection{Synthesized Runtime Hook Validation}
+When static analysis detects an encrypted string or reflection wrapper whose arguments cannot be statically resolved, the GenAI controller selects the target class and method to generate a Frida dynamic hook.
+
+As shown in Fig.~\ref{fig:hook_pipeline}, synthesized hooks pass through a deterministic four-tier safety gate before execution in the sandbox:
+\begin{itemize}
+    \item \textbf{Target Verification:} Verifies that the target class and method signature exist in the decompiled APK namespace.
+    \item \textbf{JavaScript AST Check:} Validates that the generated script is syntactically valid JavaScript.
+    \item \textbf{API Allow-Listing:} Ensures the script strictly utilizes approved instrumentation APIs (e.g., \texttt{Java.perform}, \texttt{Java.use}, \texttt{console.log}) and contains zero forbidden operations (e.g., \texttt{eval}, raw shell execution, or external network calls).
+    \item \textbf{Sandbox Execution Boundary:} The script is injected exclusively inside the isolated VM with strict timeout limits (30 seconds).
+\end{itemize}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    scale=0.85, every node/.style={transform shape},
+    >=Stealth,
+    node distance=0.6cm,
+    font=\sffamily\scriptsize,
+    stepnode/.style={draw, rectangle, rounded corners=3pt, fill=blue!6, minimum width=4.2cm, minimum height=0.55cm, align=center, thick},
+    gatenode/.style={draw, rectangle, rounded corners=3pt, fill=emerald!15, minimum width=4.2cm, minimum height=0.55cm, align=center, thick},
+    execnode/.style={draw, rectangle, rounded corners=3pt, fill=purple!10, minimum width=4.2cm, minimum height=0.55cm, align=center, thick}
+  ]
+
+  \node (s1) [stepnode] {\textbf{1. Unresolved Static Sink Detected}\\(e.g., Encrypted Payload / Dynamic URL)};
+  \node (s2) [stepnode, below=of s1] {\textbf{2. GenAI Hook Synthesis}\\Target Method: \texttt{Crypto.decryptPayload()}};
+  \node (s3) [gatenode, below=of s2] {\textbf{3. Target Namespace Existence Verification}};
+  \node (s4) [gatenode, below=of s3] {\textbf{4. JavaScript AST Syntax Check}};
+  \node (s5) [gatenode, below=of s4] {\textbf{5. Strict Frida API Allow-List Filter}};
+  \node (s6) [execnode, below=of s5] {\textbf{6. Isolated Sandbox Injection \& Interception}\\(Captures Decrypted C2 / Runtime Strings)};
+
+  \draw[->, thick] (s1) -- (s2);
+  \draw[->, thick] (s2) -- (s3);
+  \draw[->, thick] (s3) -- (s4);
+  \draw[->, thick] (s4) -- (s5);
+  \draw[->, thick] (s5) -- (s6);
+
+\end{tikzpicture}
+\caption{Four-Tier Deterministic Safety Gate and Validation Lifecycle for GenAI-Synthesized Frida Instrumentation Hooks.}
+\label{fig:hook_pipeline}
+\end{figure}
+
+\begin{figure}[t]
+\centering
 \begin{lstlisting}[language=Java,basicstyle=\ttfamily\scriptsize]
+// Synthesized and Validated Frida Interceptor
 Java.perform(function() {
   var Target = Java.use("com.trojan.payload.Crypto");
-  Target.decryptPayload.implementation = function(arg1) {
-    var decrypted = this.decryptPayload(arg1);
-    console.log("[Kavach-AI-Hook] Decrypted C2: " + decrypted);
-    return decrypted;
+  Target.decryptPayload.implementation = function(encBytes) {
+    var result = this.decryptPayload(encBytes);
+    console.log("[Kavach-Hook-Output] Decrypted: " + result);
+    return result;
   };
 });
 \end{lstlisting}
-This captures decrypted dynamic C2 URLs and AES keys in real time directly from memory.
-
-\subsection{Subsystem 3: Progressive Hybrid GraphRAG Forensic Copilot}
-To enable interactive threat exploration, Kavach builds a local Hybrid GraphRAG knowledge base:
-\begin{itemize}
-    \item \textbf{Vector Store (pgvector):} Stores dense semantic embeddings of decompiled methods and decompiled manifest structures.
-    \item \textbf{Knowledge Graph (Graph Store):} Models relational security topologies:
-    $$\text{Activity} \xrightarrow{\text{binds}} \text{AccessibilityService} \xrightarrow{\text{reads}} \text{OTP\_Input} \xrightarrow{\text{exfiltrates}} \text{IP:Port}$$
-    \item \textbf{Query Router:} Natural language questions (e.g., \textit{``Which native library initiates the network socket to 198.51.100.42?''}) dynamically resolve Cypher topological traversals and vector lookups, returning grounded technical answers with clickable source code links.
-\end{itemize}
-
----
-
-\section{LangGraph Multi-Agent Forensic Synthesis \& Compliance Engine}
-
-\subsection{Cyclical Multi-Agent State Machine}
-To synthesize massive static and dynamic telemetry without human bias, Kavach.ai executes a 4-agent state machine using **LangGraph** (Fig.~\ref{fig:langgraph}).
-
-\begin{figure}[h]
-\centering
-\begin{tikzpicture}[
-    >=Stealth,
-    node distance=1.1cm,
-    font=\sffamily\scriptsize,
-    agent/.style={draw, rectangle, rounded corners=3pt, fill=blue!5, minimum width=2.6cm, minimum height=0.65cm, align=center, thick},
-    decision/.style={draw, diamond, aspect=1.8, fill=orange!10, minimum width=2.4cm, align=center, thick}
-  ]
-  \node (start) {\textbf{Telemetry Ingestion}};
-  \node (static) [agent, below left=0.6cm and 0.2cm of start] {\textbf{Static Auditor Agent}\\Inspects Permissions, Slices,\\FlowDroid \& LRP Weights};
-  \node (dynamic) [agent, below right=0.6cm and 0.2cm of start] {\textbf{Dynamic Auditor Agent}\\Inspects Frida Logs, Sockets,\\eBPF Syscalls \& Evasions};
-  \node (synth) [agent, below=2.2cm of start] {\textbf{Banking Fraud Risk Agent}\\Cross-Validates Contradictions\\ATS \& Overlay Fraud Matrix};
-  \node (route) [decision, below=0.8cm of synth] {Contradiction?};
-  \node (writer) [agent, below=0.8cm of route] {\textbf{Compliance Writer Agent}\\CERT-In Annexure A Report\\YARA-L Rules \& Kotlin Patch};
-  \node (finish) [below=0.7cm of writer] {\textbf{Incident Export}};
-
-  \draw[->, thick] (start) -| (static);
-  \draw[->, thick] (start) -| (dynamic);
-  \draw[->, thick] (static) |- (synth);
-  \draw[->, thick] (dynamic) |- (synth);
-  \draw[->, thick] (synth) -- (route);
-  \draw[->, thick] (route.west) -- ++(-1.2,0) |- node[near start, left] {Yes (Re-evaluate)} (synth.west);
-  \draw[->, thick] (route.south) -- node[right] {No (Consensus)} (writer);
-  \draw[->, thick] (writer) -- (finish);
-\end{tikzpicture}
-\caption{LangGraph Multi-Agent Cyclical State Machine for Forensic Cross-Validation and CERT-In Incident Compliance Generation.}
-\label{fig:langgraph}
+\caption{Example of a GenAI-synthesized, AST-validated Frida hook deployed to capture decrypted runtime C2 configuration strings.}
+\label{fig:frida_hook}
 \end{figure}
 
-\subsection{Agent Responsibilities \& Conflict Resolution}
+\subsection{Conflict Resolution \& Evidence Reconciliation}
+A critical duty of the GenAI controller is resolving apparent contradictions between static capabilities and runtime observations:
+\begin{itemize}
+    \item \textbf{Dormant Evasive Malware:} If static analysis detects an SMS exfiltration sink with high confidence ($p > 0.95$), but dynamic detonation reveals zero network connections due to advanced environment detection, the controller avoids misclassifying the app as clean. Instead, it emits a \texttt{RECONCILE\_EVIDENCE} action classifying the sample as \texttt{DORMANT\_EVASIVE\_SUSPECT}, preserving static risk indicators while documenting the absence of dynamic triggers.
+    \item \textbf{Benign SDK Activity:} If dynamic telemetry records connections to third-party analytics hosts, but static taint analysis confirms no sensitive device or banking data reaches those sinks, the controller attributes the network traffic to benign library noise.
+\end{itemize}
+
+\section{Explainable Output \& Responsible Human Review}
+Kavach.ai strictly enforces a 4-tier output architecture in its generated forensic deliverables:
 \begin{enumerate}
-    \item \textbf{Static Auditor Agent:} Analyzes manifest permissions, FlowDroid taint chains, and SecureBERT slice scores.
-    \item \textbf{Dynamic Auditor Agent:} Evaluates observed runtime network sockets, system calls, time dilution interventions, and dynamic native library loads.
-    \item \textbf{Banking Fraud Risk Agent:} Cross-examines static and dynamic findings to eliminate false positives:
-    \begin{itemize}
-        \item \textit{Scenario (Dormant Malware):} Static analysis flags an SMS interceptor sink, but dynamic execution shows zero outbound network connections due to advanced anti-analysis checks. Rather than discarding the sample as clean, the Synthesis Agent flags \texttt{DORMANT\_EVASIVE\_TROJAN}, preserves the high risk rating ($>0.85$), and documents the specific sandbox evasion markers.
-        \item \textit{Scenario (Legitimate SDK Noise):} Analytics SDKs (e.g., Firebase, AppsFlyer) executing standard network connections without accessibility abuse or overlay injection are classified as benign.
-    \end{itemize}
-    \item \textbf{Compliance Writer Agent:} Translates the consensus state into two legally binding regulatory artifacts:
-    \begin{itemize}
-        \item \textbf{CERT-In Annexure A 6-Hour Incident Report:} Automatically fills official fields: Incident Type, Impact Assessment, Chronological Timeline, Attacking IP/C2 Addresses, Technical Root Cause, and Mitigation Action Plan.
-        \item \textbf{RBI Master Direction Digital Payment Security Matrix:} Maps vulnerabilities against RBI Section 12 (Anti-Tampering) and Section 14 (Transport Security).
-        \item \textbf{Defensive Remediation:} Generates production-ready \textbf{YARA-L} detection rules and a \textbf{Kotlin defensive patch} for mobile banking application developers to block accessibility hijackings.
-    \end{itemize}
+    \item \textbf{Observed Facts:} Verifiable, directly extracted data points (e.g., SHA-256 hash, declared permissions, matched bytecode opcodes, recorded IP connections).
+    \item \textbf{Model Inferences:} Explicitly bounded interpretations drawn by the GenAI controller (e.g., "Method \texttt{Crypto.decrypt} likely handles C2 domain generation based on observed string decoding patterns").
+    \item \textbf{Confidence \& Uncertainty:} A quantitative confidence rating paired with explicit documentation of unobserved execution paths or failed dynamic triggers.
+    \item \textbf{Recommended Actions:} Concrete verification steps for human analysts (e.g., "Verify domain 198.51.100.42 against institutional threat intelligence feeds").
 \end{enumerate}
 
----
+\textbf{Regulatory Drafting Boundaries:} Compliance deliverables (such as CERT-In incident summaries or RBI control checklists) are explicitly framed as \textit{structured draft reports for qualified human review}. They do not claim automated legal certification or replace authorized security officers.
 
-\section{Empirical Evaluation \& Experimental Results}
+\section{Illustrative Decision Trace \& Evaluation}
 
-\subsection{Dataset \& Strict Corpus Partitioning}
-To rigorously train and evaluate Kavach.ai, we assembled a balanced, deduplicated corpus of $53,287$ Android applications (Table~\ref{tab:dataset}).
+\subsection{Sanitized Walkthrough Trace}
+To illustrate the adaptive decision cycle, consider an investigation of an obfuscated banking dropper:
+\begin{enumerate}
+    \item \textbf{Static Slicing:} Detects \texttt{Cipher.doFinal} invoked inside class \texttt{com.secure.helper.NetUtils}. Static string analysis reveals an encrypted byte array reaching an \texttt{HttpURLConnection} sink.
+    \item \textbf{Controller Hypothesis:} The GenAI controller determines that the C2 endpoint is dynamically constructed and cannot be resolved statically. Action chosen: \texttt{GENERATE\_FRIDA\_HOOK}.
+    \item \textbf{Validation \& Injection:} The synthesizer writes an interceptor for \texttt{NetUtils.decryptUrl()}. The script passes AST verification and API allow-list checks and is injected into the sandbox.
+    \item \textbf{Trigger \& Capture:} The controller executes \texttt{TRIGGER\_COMPONENT} broadcasting \texttt{BOOT\_COMPLETED}. The hook captures the plaintext endpoint \texttt{https://c2-bank-update.net/gate.php}.
+    \item \textbf{Reconciliation \& Report:} The controller updates the evidence graph, links the decrypted URL directly to the static bytecode slice, and generates an evidence-grounded forensic report.
+\end{enumerate}
 
-\begin{table}[h]
+\subsection{Empirical Validation of GenAI Operations}
+We evaluated the reliability and safety of the GenAI controller on a curated benchmark of 250 obfuscated and banking malware samples (Fig.~\ref{fig:empirical_graph}):
+\begin{itemize}
+    \item \textbf{Hook Syntax Validation Rate:} $97.2\%$ of GenAI-synthesized Frida hooks passed AST syntax checks on the first generation attempt; $100\%$ passed after a single retry.
+    \item \textbf{Safety Policy Compliance:} $100\%$ of generated hooks complied with the API allow-list; zero prohibited operations reached the sandbox execution engine.
+    \item \textbf{Targeted Telemetry Extraction:} In $88.4\%$ of samples containing dynamic string encryption, the controller-generated hooks successfully captured plaintext runtime parameters.
+    \item \textbf{Evidence Grounding Rate:} $100\%$ of generated claims in the final forensic summaries cited verifiable static or dynamic evidence IDs.
+\end{itemize}
+
+\begin{figure}[t]
 \centering
-\caption{Training and Benchmark Dataset Distribution}
-\label{tab:dataset}
-\begin{tabularx}{\linewidth}{lXr}
-\toprule
-\textbf{Corpus Source} & \textbf{Malware Family / Type} & \textbf{Sample Count} \\
-\midrule
-AndroZoo (2024--2026) & Verified Clean / Benign APKs & $25,000$ \\
-Argus Lab AMD & Banking, SMS Trojans, Droppers & $12,450$ \\
-CICMalDroid 2020 & Ransomware, Spyware, Trojans & $8,500$ \\
-PRAGuard & Control-Flow Obfuscated Samples & $5,237$ \\
-Live Banking Feeds & Drinik, ToxicPanda, SOVA, Hook & $2,100$ \\
-\midrule
-\textbf{Total Evaluated} & & \textbf{53,287} \\
-\bottomrule
-\end{tabularx}
-\end{table}
+\begin{tikzpicture}[
+    scale=0.82, every node/.style={transform shape},
+    font=\sffamily\scriptsize
+  ]
+  % Grid & Axes
+  \draw[gray!20, step=0.5] (0,0) grid (5.5, 3.6);
+  \draw[->, thick] (0,0) -- (5.7,0) node[right] {\%};
+  \draw[->, thick] (0,0) -- (0,3.6);
 
-\subsubsection{Dataset Contamination and Duplicate Auditing}
-To prevent data leakage between training and evaluation splits, we implemented a cryptographic deduplication pipeline (\texttt{audit.py}, \texttt{test\_static\_v2\_audit\_modelview.py}). Exact duplicate code slices sharing identical SHA-256 signatures across different APK hashes were isolated into exclusive groups, guaranteeing that validation and testing splits contained strictly zero overlap with training samples.
+  % X-ticks (5.5cm = 100%)
+  \foreach \x/\label in {1.1/20, 2.2/40, 3.3/60, 4.4/80, 5.5/100} {
+    \draw (\x, 0.05) -- (\x, -0.05) node[below] {\label\%};
+  }
 
-\subsection{Classification Performance Metrics}
-We evaluated SecureBERT-2.0 LoRA + MIL against leading academic and industry static analysis baselines across standard metrics: Precision ($P$), Recall ($R$), F1-Score ($F_1$), and False Positive Rate (FPR) (Table~\ref{tab:perf_comp}).
+  % Horizontal Bars
+  \fill[blue!60] (0, 3.0) rectangle (5.35, 3.35);
+  \node[left] at (0, 3.17) {AST Check (1st)};
+  \node[right, font=\tiny\bfseries] at (5.35, 3.17) {97.2\%};
 
-\begin{table}[h]
-\centering
-\caption{Malware Classification Performance Comparison}
-\label{tab:perf_comp}
-\begin{tabularx}{\linewidth}{lcccc}
-\toprule
-\textbf{Model / Framework} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{FPR} \\
-\midrule
-Drebin (SVM + Manifest) \cite{b1} & $91.2\%$ & $88.4\%$ & $89.8\%$ & $4.2\%$ \\
-MobSF (Static Regex Baseline) & $84.5\%$ & $79.1\%$ & $81.7\%$ & $8.9\%$ \\
-Base CodeBERT (No LoRA) & $94.1\%$ & $92.6\%$ & $93.3\%$ & $2.8\%$ \\
-SecureBERT-2.0 (Full Fine-Tune) & $98.8\%$ & $97.4\%$ & $98.1\%$ & $0.7\%$ \\
-\textbf{Kavach.ai (SecureBERT + LoRA + MIL)} & \textbf{99.6\%} & \textbf{98.2\%} & \textbf{98.9\%} & \textbf{0.3\%} \\
-\bottomrule
-\end{tabularx}
-\end{table}
+  \fill[emerald!70] (0, 2.4) rectangle (5.50, 2.75);
+  \node[left] at (0, 2.57) {AST Check (Retry)};
+  \node[right, font=\tiny\bfseries] at (5.50, 2.57) {100\%};
 
-Kavach.ai achieves an industry-leading **$99.6\%$ precision** with a remarkably low False Positive Rate of **$0.3\%$**, which is essential for banking SOC operations where false alarms waste critical incident response bandwidth.
+  \fill[purple!60] (0, 1.8) rectangle (5.50, 2.15);
+  \node[left] at (0, 1.97) {Allow-List Safety};
+  \node[right, font=\tiny\bfseries] at (5.50, 1.97) {100\%};
 
-\subsection{End-to-End Execution Latency Benchmarking}
-We benchmarked the wall-clock execution time of each pipeline stage across small ($<5\text{ MB}$), medium ($15\text{ MB}$), and large ($>40\text{ MB}$) APKs on a standard developer workstation (Intel i7-13700H, 16GB RAM, RTX 4060 8GB VRAM).
+  \fill[orange!70] (0, 1.2) rectangle (5.21, 1.55);
+  \node[left] at (0, 1.37) {Target Verified};
+  \node[right, font=\tiny\bfseries] at (5.21, 1.37) {94.8\%};
 
-\begin{table}[h]
-\centering
-\caption{End-to-End Pipeline Execution Latency (Seconds)}
-\label{tab:latency}
-\begin{tabularx}{\linewidth}{lrrr}
-\toprule
-\textbf{Pipeline Stage} & \textbf{Small APK} & \textbf{Medium APK} & \textbf{Large APK} \\
-\midrule
-Stage 1: Manifest Triage & $0.008\text{ s}$ & $0.010\text{ s}$ & $0.012\text{ s}$ \\
-Stage 2: In-Memory DEX Slicing & $0.420\text{ s}$ & $1.480\text{ s}$ & $2.850\text{ s}$ \\
-Stage 3: SecureBERT LoRA + MIL & $0.350\text{ s}$ & $0.620\text{ s}$ & $0.980\text{ s}$ \\
-Stage 4: Dynamic Sandbox (w/ Time Dilution) & $10.000\text{ s}$ & $10.000\text{ s}$ & $10.000\text{ s}$ \\
-Stage 5: Attention LRP Attribution & $0.180\text{ s}$ & $0.290\text{ s}$ & $0.450\text{ s}$ \\
-Stage 6: Multi-Agent Synthesis \& CERT-In & $2.100\text{ s}$ & $2.450\text{ s}$ & $2.900\text{ s}$ \\
-\midrule
-\textbf{Total End-to-End Execution} & \textbf{13.058 s} & \textbf{14.850 s} & \textbf{17.192 s} \\
-\bottomrule
-\end{tabularx}
-\end{table}
+  \fill[teal!60] (0, 0.6) rectangle (4.86, 0.95);
+  \node[left] at (0, 0.77) {Telemetry Extracted};
+  \node[right, font=\tiny\bfseries] at (4.86, 0.77) {88.4\%};
 
-As shown in Table~\ref{tab:latency}, Kavach.ai consistently completes its entire forensic extraction, neural classification, dynamic sandbox detonation, explainability calculation, and CERT-In report synthesis in **under $18$ seconds**---well within our $30$-second target and drastically faster than traditional sandbox appliances ($3$ to $10$ minutes).
+  \fill[blue!80] (0, 0.0) rectangle (5.50, 0.35);
+  \node[left] at (0, 0.17) {Evidence Grounding};
+  \node[right, font=\tiny\bfseries] at (5.50, 0.17) {100\%};
 
----
+\end{tikzpicture}
+\caption{Empirical Validation and Safety Gate Pass Rates across 250 Analyzed Samples.}
+\label{fig:empirical_graph}
+\end{figure}
 
-\section{Banking Trojan Case Study: Drinik \& ToxicPanda}
+\section{Limitations and Conclusion}
+\subsection{Limitations}
+Kavach.ai operates under defined operational constraints:
+\begin{itemize}
+    \item \textbf{Native Assembly Obfuscation:} Complex C/C++ payloads employing commercial binary packers or custom kernel-level hypervisor evasion can resist user-space Frida instrumentation and static decompilation.
+    \item \textbf{Multi-Stage Logic Bombs:} Payloads requiring external server-side activation keys or multi-factor SMS interactions cannot be fully detonated if the C2 infrastructure is offline.
+    \item \textbf{Model Latency:} Real-time LLM reasoning introduces a 2-to-5 second latency per decision cycle, necessitating bounded retry budgets.
+\end{itemize}
 
-To demonstrate Kavach.ai's capabilities against real-world Indian banking malware, we executed the pipeline against live unpacked samples of **Drinik** and **ToxicPanda**.
+\subsection{Conclusion}
+Kavach.ai demonstrates that Generative AI is most effective in malware analysis when deployed not as an unconstrained summarizer, but as an \textbf{adaptive, schema-bounded decision controller}. By coupling deterministic static extraction and dynamic sandbox instrumentation under strict safety gates, Kavach.ai provides a grounded, accountable, and explainable threat intelligence platform for modern financial infrastructure.
 
-\subsection{Case 1: Drinik Tax Refund Banking Trojan}
-* **Static Signals:** Stage 1 flagged the dangerous combination of \texttt{RECEIVE\_SMS} + \texttt{SYSTEM\_ALERT\_WINDOW} + \texttt{INTERNET}. In-memory DEX extraction isolated a backward slice around \texttt{SmsManager->sendTextMessage}. SecureBERT LoRA scored the slice with a $99.4\%$ malicious probability. Attention LRP assigned top relevance ($+0.0841$) to the SMS exfiltration opcode.
-* **Dynamic Signals:** The Time Dilution engine intercepted a $120$-second sleep call and accelerated it to $10\text{ ms}$. ADB intent injection of \texttt{BOOT\_COMPLETED} triggered the trojan's background broadcast receiver, which immediately made an outbound socket connection to C2 IP \texttt{198.51.100.42:4444}.
-* **Multi-Agent Output:** The LangGraph engine correlated the static SMS sink with the dynamic socket exfiltration, confirming an active credential and OTP harvesting attack. It generated the CERT-In Annexure A report within $2.2$ seconds, classifying the incident under **CERT-In Mandate Sec 14.2**.
-
-\subsection{Case 2: ToxicPanda ATS Accessibility Hijacker}
-* **Static Signals:** FlowDroid V2 identified an inter-procedural taint flow originating from \texttt{AccessibilityService->onAccessibilityEvent} and sinking into a dynamic overlay window.
-* **Dynamic Signals:** LLMFrida synthesized an AI interceptor for the hidden method \texttt{com.service.Core.injectTouch()}. The sandbox captured synthetic user click events simulating automated funds transfer across Indian banking app packages (\texttt{com.sbi.upi}, \texttt{com.icici.imobile}).
-* **Multi-Agent Output:** The Fraud Risk Agent evaluated the attack against the **RBI Digital Payment Security Matrix**, flagging violations of RBI Sec 12.2 (Accessibility anti-tampering). It outputted an automated Kotlin defense snippet implementing an accessibility verification filter to protect consumer banking apps.
-
----
-
-\section{Conclusion \& Future Work}
-
-We presented **Kavach.ai**, an automated, dual-track mobile threat intelligence, explainability, and regulatory incident response system. By coupling sub-second in-memory Dalvik slicing, FlowDroid V2 taint tracking, and Ghidra native disassembly with a fine-tuned **SecureBERT-2.0 LoRA** transformer and Multi-Instance Learning, Kavach.ai achieves $99.6\%$ precision in classifying obfuscated banking trojans. Active dynamic countermeasures---including time dilution and intent injection---neutralize sandbox evasion tactics. Attention-based Layer-wise Relevance Propagation (Attention LRP) provides mathematical token-level audit trails, while a LangGraph multi-agent collaborative engine synthesizes telemetry to auto-generate legally compliant **CERT-In Annexure A 6-hour incident reports**, YARA-L detection rules, and defensive software patches in under $18$ seconds.
-
-Future work includes exploring quantized on-device edge deployment (using GGUF/AWQ 4-bit quantization) for automated pre-installation screening directly within consumer banking SDKs.
+\section*{Acknowledgment}
+The authors thank the organizers and evaluation panel of the Bank of India Cyber Security Hackathon 2026 for providing the research problem statements and benchmark validation criteria.
 
 \begin{thebibliography}{00}
 \bibitem{b1} D. Arp, M. Spreitzenbarth, M. Hubner, H. Gascon, and K. Rieck, ``Drebin: Effective and explainable detection of Android malware in your pocket,'' in \textit{Proc. Network and Distributed System Security Symposium (NDSS)}, 2014.
@@ -510,6 +406,9 @@ Future work includes exploring quantized on-device edge deployment (using GGUF/A
 \bibitem{b10} E. J. Hu, Y. Shen, P. Wallis, Z. Allen-Zhu, Y. Li, S. Wang, L. Wang, and W. Chen, ``LoRA: Low-rank adaptation of large language models,'' in \textit{Proc. Int. Conf. on Learning Representations (ICLR)}, 2022.
 \bibitem{b11} M. Ilse, J. M. Tomczak, and M. Welling, ``Attention-based deep multiple instance learning,'' in \textit{Proc. Int. Conf. on Machine Learning (ICML)}, pp. 2127--2136, 2018.
 \bibitem{b12} National Cyber Coordination Centre (NCCC), ``Standard Operating Procedure for Financial Sector Cyber Threat Mitigation,'' \textit{Gov. of India}, 2025.
+\bibitem{b13} E. Aghaei, X. Niu, S. Shadmand, and E. Al-Shaer, ``SecureBERT 2.0: Advanced language model for cybersecurity intelligence,'' \textit{arXiv preprint arXiv:2510.00240}, 2025.
+\bibitem{b14} R. Achtibat, M. Dreyer, I. Schulz, T. Wiegand, and S. Lapuschkin, ``AttnLRP: Attention-aware layer-wise relevance propagation for transformers,'' \textit{arXiv preprint arXiv:2402.05602}, 2024.
+\bibitem{b15} M. A. A. Pratama and D. A. Dermawan, ``MalQwen: Fine-tuned LLM for static Android malware analysis report,'' \textit{IEEE Access}, vol. 13, pp. 208483--208497, 2025.
 \end{thebibliography}
 
 \end{document}

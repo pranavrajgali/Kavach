@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useDetonation } from '@/context/DetonationContext';
 import { 
   Bot, Send, Square, X, ChevronUp, 
-  RotateCcw, Copy, Check, Maximize2
+  RotateCcw, Copy, Check
 } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/ui/markdown-renderer';
 
@@ -10,8 +10,6 @@ export const VajraAssistantDrawer: React.FC = () => {
   const { 
     apkDetails, 
     staticResults, 
-    currentView, 
-    setCurrentView,
     ragMessages,
     sendRagQuery,
     isRagStreaming,
@@ -32,11 +30,6 @@ export const VajraAssistantDrawer: React.FC = () => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [ragMessages, isOpen, isRagStreaming]);
-
-  // If we are already on the full 'rag_agent' view, don't show the redundant floating drawer
-  if (currentView === 'rag_agent') {
-    return null;
-  }
 
   const handleSend = (queryText?: string) => {
     const textToSend = (queryText || inputQuery).trim();
@@ -102,16 +95,6 @@ export const VajraAssistantDrawer: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  setCurrentView('rag_agent');
-                }}
-                className="p-1 text-muted-foreground hover:text-foreground hover:bg-secondary transition-all"
-                title="Expand to Full Workbench"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-              </button>
               <button
                 onClick={clearRagSession}
                 className="p-1 text-muted-foreground hover:text-foreground hover:bg-secondary transition-all cursor-pointer"

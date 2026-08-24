@@ -14,6 +14,8 @@ try:
 except ImportError:
     Groq = None
 
+from kavach_ai.backend.pipeline.stage6_synthesis.multi_agent import MultiAgentOrchestrator
+
 class KavachForensicReport(BaseModel):
     summary: str
     risk_score: int
@@ -33,6 +35,7 @@ class JointForensicReport(BaseModel):
     forensic: KavachForensicReport
     cert_in: CertInIncidentReport
     mitre_attack_json: Dict[str, Any]
+    cert_in_annexure_a: Optional[Dict[str, Any]] = None
 
 def fallback_generate_report(merged: dict) -> dict:
     apk_details = merged.get("apk_details") or merged.get("apk_meta") or {}
@@ -253,6 +256,14 @@ def fallback_generate_report(merged: dict) -> dict:
     if not dynamic_findings_list:
         dynamic_findings_list = ["Sandbox dynamic execution recorded without critical runtime violations"]
 
+    # Run MultiAgentOrchestrator to produce official CERT-In Annexure A
+    multi_agent_res = MultiAgentOrchestrator().synthesize(
+        static_data=merged.get("static_data") or {"triage": {"permissions": permissions, "permission_combinations": permission_combinations}, "ml_metrics": {"securebert_probability": prob}},
+        dynamic_data=merged.get("behavioral_fingerprint") or merged,
+        apk_meta={"package": package, "filename": filename, "apk_hash": apk_hash, "file_size": size}
+    )
+    cert_in_annexure_a = multi_agent_res.get("cert_in_annexure_a")
+
     return JointForensicReport(
         forensic=KavachForensicReport(
             summary=summary,
@@ -275,7 +286,8 @@ def fallback_generate_report(merged: dict) -> dict:
         mitre_attack_json={
             "tactics": tactics,
             "techniques": techniques
-        }
+        },
+        cert_in_annexure_a=cert_in_annexure_a
     ).model_dump()
 
 def generate_report_groq(merged: dict) -> dict:

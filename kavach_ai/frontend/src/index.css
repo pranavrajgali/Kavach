@@ -77,3 +77,57 @@ body {
     background: radial-gradient(circle at 50% 50%, #18181B 0%, #09090B 100%) !important;
     min-height: 100vh;
 }
+
+@media print {
+    /* Hide all non-printable UI shells, sidebars, drawers, and action bars */
+    aside,
+    header,
+    .no-print,
+    .fixed,
+    nav,
+    button {
+        display: none !important;
+    }
+
+    /* Reset layout constraints for proper multi-page pagination */
+    html, body {
+        background: #FFFFFF !important;
+        color: #000000 !important;
+        height: auto !important;
+        min-height: auto !important;
+        overflow: visible !important;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    }
+
+    div, main {
+        overflow: visible !important;
+        height: auto !important;
+        max-height: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    .cert-in-print-root {
+        padding: 20px !important;
+        margin: 0 auto !important;
+        width: 100% !important;
+        max-width: 800px !important;
+        background: #FFFFFF !important;
+        color: #111827 !important;
+    }
+
+    .cert-in-section {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        margin-bottom: 20px !important;
+    }
+
+    @page {
+        margin: 1.5cm;
+        size: A4 portrait;
+    }
+}

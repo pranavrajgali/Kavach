@@ -509,15 +509,98 @@ export const StaticView: React.FC = () => {
   const providers = staticResults?.triage?.providers || [];
   const allComponents = [...activities, ...services, ...receivers, ...providers];
 
+  const getManifestComponentDescription = (typeLabel: string, compName: string) => {
+    const lower = compName.toLowerCase();
+    
+    if (lower.includes('sms') || lower.includes('mms') || lower.includes('message')) {
+      return {
+        issue: `Unprotected SMS ${typeLabel} (${compName})`,
+        severity: 'high' as const,
+        description: `Exported SMS ${typeLabel.toLowerCase()} allows unauthorized third-party apps to trigger silent SMS dispatch, intercept authentication OTPs, and exfiltrate carrier messages without user interaction.`
+      };
+    }
+    
+    if (lower.includes('phone') || lower.includes('call') || lower.includes('telephony')) {
+      return {
+        issue: `Unprotected Telephony ${typeLabel} (${compName})`,
+        severity: 'high' as const,
+        description: `Exported telephony ${typeLabel.toLowerCase()} permits rogue applications to hook into active phone states, listen to call events, and extract carrier SIM parameters.`
+      };
+    }
+
+    if (lower.includes('uninstall') || lower.includes('admin') || lower.includes('deviceadmin') || lower.includes('protect')) {
+      return {
+        issue: `Anti-Removal Defense ${typeLabel} (${compName})`,
+        severity: 'high' as const,
+        description: `Exported uninstaller handler acts as a persistence shield, intercepting package removal intents to prevent clean deletion and maintain unauthorized background presence.`
+      };
+    }
+
+    if (lower.includes('autorun') || lower.includes('boot') || lower.includes('system') || lower.includes('startup') || lower.includes('restart')) {
+      return {
+        issue: `Persistent Autostart ${typeLabel} (${compName})`,
+        severity: 'high' as const,
+        description: `Exported startup entrypoint listens for system broadcasts (e.g. BOOT_COMPLETED, USER_PRESENT) to revive dormant background processes and evade OS idle termination.`
+      };
+    }
+
+    if (lower.includes('upload') || lower.includes('sync') || lower.includes('c2') || lower.includes('network') || lower.includes('content') || lower.includes('http')) {
+      return {
+        issue: `Data Exfiltration & C2 ${typeLabel} (${compName})`,
+        severity: 'high' as const,
+        description: `Exported content synchronization service can be invoked externally to trigger unauthorized background uploads, streaming harvested device telemetry to remote C2 infrastructure.`
+      };
+    }
+
+    if (lower.includes('overlay') || lower.includes('openactivity') || lower.includes('phish') || lower.includes('window') || lower.includes('lock')) {
+      return {
+        issue: `Dynamic UI Overlay Trigger (${compName})`,
+        severity: 'high' as const,
+        description: `Exported activity trigger enables launching stealth UI overlay screens on top of targeted financial applications to capture user credentials and PINs.`
+      };
+    }
+
+    if (lower.includes('receiver') || lower.includes('broadcast') || lower.includes('mgr') || lower.includes('event')) {
+      return {
+        issue: `Unprotected Broadcast Dispatcher (${compName})`,
+        severity: 'high' as const,
+        description: `Exported broadcast manager allows unauthenticated inter-process intent crafting, exposing internal application logic and event handlers to arbitrary execution.`
+      };
+    }
+
+    if (lower.includes('soft') || lower.includes('plugin') || lower.includes('dex') || lower.includes('load') || lower.includes('dynamic')) {
+      return {
+        issue: `Dynamic Payload Loader Service (${compName})`,
+        severity: 'high' as const,
+        description: `Exported service accepts external invocation to load and execute secondary DEX payloads or encrypted plugins without runtime integrity verification.`
+      };
+    }
+
+    if (lower.includes('main') || lower.includes('entry') || lower.includes('splash') || lower.includes('start')) {
+      return {
+        issue: `Public Launch Entrypoint (${compName})`,
+        severity: 'medium' as const,
+        description: `Main application entrypoint with intent-filter allowing direct external invocation without prior authentication or sandbox state validation.`
+      };
+    }
+
+    return {
+      issue: `Exposed ${typeLabel} (${compName})`,
+      severity: 'high' as const,
+      description: `An unprotected ${typeLabel.toLowerCase()} is exported without android:permission restrictions, allowing any malicious app installed on the device to invoke it directly via implicit intents.`
+    };
+  };
+
   const manifestIssues: Array<{ issue: string, severity: 'high' | 'medium' | 'low', description: string }> = [];
 
   allComponents.forEach((comp: any) => {
     if (comp.exported && !comp.permission) {
       const typeLabel = comp.component_type ? comp.component_type.charAt(0).toUpperCase() + comp.component_type.slice(1) : 'Component';
+      const parsed = getManifestComponentDescription(typeLabel, comp.name);
       manifestIssues.push({
-        issue: `${typeLabel} (${comp.name}) is not Protected. An intent-filter exists.`,
-        severity: 'high',
-        description: `An ${typeLabel} is found to be shared with other apps on the device therefore leaving it accessible to any other application on the device. The presence of intent-filter indicates that the ${typeLabel} is explicitly exported.`
+        issue: parsed.issue,
+        severity: parsed.severity,
+        description: parsed.description
       });
     }
   });
@@ -541,32 +624,62 @@ export const StaticView: React.FC = () => {
 
   // Pre-populate mock manifest issues for simulation mode or default state
   if (manifestIssues.length === 0 && (simulationMode || allComponents.length === 0)) {
-    const pkg = staticResults?.apk_details?.package || 'com.domobile.applock';
+    const pkg = staticResults?.apk_details?.package || 'com.kbstar.kb.android';
     manifestIssues.push(
       {
-        issue: `Activity (${pkg}.MediaReceiverActivity) is not Protected. An intent-filter exists.`,
-        severity: 'high',
-        description: 'An Activity is found to be shared with other apps on the device therefore leaving it accessible to any other application on the device. The presence of intent-filter indicates that the Activity is explicitly exported.'
+        issue: `Public Launch Entrypoint (${pkg}.star.MainA)`,
+        severity: 'medium',
+        description: 'Main application entrypoint with exported intent-filter allowing direct external invocation without prior authentication or sandbox state validation.'
       },
       {
-        issue: `Activity (${pkg}.ActiveProfileActivity) is not Protected. An intent-filter exists.`,
+        issue: `Unprotected Telephony Service (${pkg}.services.PhoneService)`,
         severity: 'high',
-        description: 'An Activity is found to be shared with other apps on the device therefore leaving it accessible to any other application on the device. The presence of intent-filter indicates that the Activity is explicitly exported.'
+        description: 'Exported telephony service permits rogue applications to hook into active phone states, listen to call events, and extract carrier SIM parameters.'
       },
       {
-        issue: `Activity (${pkg}.MainActivity) is not Protected. An intent-filter exists.`,
+        issue: `Dynamic Payload Loader Service (${pkg}.services.SoftService)`,
         severity: 'high',
-        description: 'An Activity is found to be shared with other apps on the device therefore leaving it accessible to any other application on the device. The presence of intent-filter indicates that the Activity is explicitly exported.'
+        description: 'Exported service accepts external invocation to load and execute secondary DEX payloads or encrypted plugins without runtime integrity verification.'
       },
       {
-        issue: `Activity (${pkg}.PluginVerifyActivity) is not Protected. An intent-filter exists.`,
+        issue: `Anti-Removal Defense Service (${pkg}.services.UninstallerService)`,
         severity: 'high',
-        description: 'An Activity is found to be shared with other apps on the device therefore leaving it accessible to any other application on the device. The presence of intent-filter indicates that the Activity is explicitly exported.'
+        description: 'Exported uninstaller handler acts as a persistence shield, intercepting package removal intents to prevent clean deletion and maintain unauthorized background presence.'
       },
       {
-        issue: `Activity (${pkg}.SceneShortcutActivity) is not Protected. An intent-filter exists.`,
+        issue: `Persistent Autostart Service (${pkg}.services.autoRunService)`,
         severity: 'high',
-        description: 'An Activity is found to be shared with other apps on the device therefore leaving it accessible to any other application on the device. The presence of intent-filter indicates that the Activity is explicitly exported.'
+        description: 'Exported startup entrypoint listens for system broadcasts (e.g. BOOT_COMPLETED, USER_PRESENT) to revive dormant background processes and evade OS idle termination.'
+      },
+      {
+        issue: `Unprotected SMS Service (${pkg}.services.sendSMSService)`,
+        severity: 'high',
+        description: 'Exported SMS service allows unauthorized third-party apps to trigger silent SMS dispatch, intercept authentication OTPs, and exfiltrate carrier messages without user interaction.'
+      },
+      {
+        issue: `Data Exfiltration & C2 Service (${pkg}.services.uploadContentService)`,
+        severity: 'high',
+        description: 'Exported content synchronization service can be invoked externally to trigger unauthorized background uploads, streaming harvested device telemetry to remote C2 infrastructure.'
+      },
+      {
+        issue: `Unprotected Broadcast Dispatcher (${pkg}.receiver.BroadcastReceiverMgr)`,
+        severity: 'high',
+        description: 'Exported broadcast manager allows unauthenticated inter-process intent crafting, exposing internal application logic and event handlers to arbitrary execution.'
+      },
+      {
+        issue: `Inbound Call & SMS Listener (${pkg}.receiver.PhoneReciever)`,
+        severity: 'high',
+        description: 'Exported receiver hooks incoming cellular events to siphon SMS verification codes and monitor incoming phone communications in real time.'
+      },
+      {
+        issue: `System State Listener (${pkg}.receiver.SystemReceiver)`,
+        severity: 'high',
+        description: 'Exported system receiver intercepts system connectivity changes and power events to maintain active covert channels.'
+      },
+      {
+        issue: `Dynamic UI Overlay Trigger (${pkg}.receiver.openActivityReceiver)`,
+        severity: 'high',
+        description: 'Exported receiver triggers stealth full-screen overlay activities on top of targeted banking apps to hijack authentication credentials.'
       }
     );
   }

@@ -1,16 +1,16 @@
 {
   "execution_mode": "SIMULATION_FALLBACK",
   "simulation_profile": "time-gate-and-c2",
-  "simulation_fingerprint": "2300773ead2b",
+  "simulation_fingerprint": "7df412124a84",
   "objection_root_bypass": true,
   "objection_ssl_pinning_bypass": true,
   "time_dilution_bypass": true,
   "time_dilution_count": 1,
   "time_dilution_events": [
-    "[Kavach-Sandbox] Time dilution: compressed Thread.sleep(600000ms) -> 10ms in com.bank.trojan"
+    "[Kavach-Sandbox] Time dilution: compressed Thread.sleep(600000ms) -> 10ms in com.xinhannewbank"
   ],
   "llm_frida_intercepts": [
-    "[LLM-Frida-Hook] Cipher.doFinal observed before outbound flow to https://com-bank-trojan-command-node.example/gate"
+    "[LLM-Frida-Hook] Cipher.doFinal observed before outbound flow to https://com-xinhannewbank-command-node.example/gate"
   ],
   "fuzzed_intents": [
     {
@@ -29,14 +29,14 @@
       "sys_openat"
     ],
     "files_accessed": [
-      "/data/user/0/com.bank.trojan/shared_prefs/config.xml",
+      "/data/user/0/com.xinhannewbank/shared_prefs/config.xml",
       "/proc/self/maps",
       "/system/bin/app_process32",
-      "/data/local/tmp/kavach-sim-2300773e.marker"
+      "/data/local/tmp/kavach-sim-7df41212.marker"
     ],
     "network_connections": [
       {
-        "ip": "198.51.100.174",
+        "ip": "198.51.100.75",
         "port": 4444,
         "protocol": "TCP",
         "status": "connected"
@@ -50,8 +50,8 @@
     ],
     "dns_resolutions": [
       {
-        "domain": "com-bank-trojan-command-node.example",
-        "resolved_ip": "198.51.100.174",
+        "domain": "com-xinhannewbank-command-node.example",
+        "resolved_ip": "198.51.100.75",
         "status": "resolved"
       }
     ],

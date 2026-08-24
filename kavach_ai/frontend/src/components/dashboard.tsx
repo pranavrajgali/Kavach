@@ -5,26 +5,23 @@ import { TerminalConsole } from '@/components/terminal-console';
 import { ReportView } from '@/components/report-view';
 import { KavachScorecard } from '@/components/kavach-scorecard';
 import { StaticView } from '@/components/static-view';
-import { BertClassifierView } from '@/components/views/bert-classifier-view';
-import { MitreMapView } from '@/components/views/mitre-map-view';
 import { CertInView } from '@/components/views/cert-in-view';
-import { SandboxHealthView } from '@/components/views/sandbox-health-view';
-import { SettingsView } from '@/components/views/settings-view';
-import { ApiCredentialsView } from '@/components/views/api-credentials-view';
 import { KavachReportView } from '@/components/views/kavach-report-view';
-import { RAGAgentView } from '@/components/views/rag-agent-view';
-import { InvestigationPlanView } from '@/components/views/investigation-plan-view';
 import { AlertCircle } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
   const { status, staticScanStatus, currentView, reset, logs } = useDetonation();
 
-  if (currentView === 'rag_agent') {
-    return <RAGAgentView />;
-  }
-
   if (currentView === 'scorecard') {
     return <KavachScorecard />;
+  }
+
+  if (currentView === 'cert_in') {
+    return <CertInView />;
+  }
+
+  if (currentView === 'kavach_report') {
+    return <KavachReportView />;
   }
 
   if (currentView === 'static_scan') {
@@ -54,38 +51,6 @@ export const Dashboard: React.FC = () => {
         </div>
       );
     }
-  }
-
-  if (currentView === 'bert_classifier') {
-    return <BertClassifierView />;
-  }
-
-  if (currentView === 'mitre_map') {
-    return <MitreMapView />;
-  }
-
-  if (currentView === 'cert_in') {
-    return <CertInView />;
-  }
-
-  if (currentView === 'sandbox_health') {
-    return <SandboxHealthView />;
-  }
-
-  if (currentView === 'settings') {
-    return <SettingsView />;
-  }
-
-  if (currentView === 'api_credentials') {
-    return <ApiCredentialsView />;
-  }
-
-  if (currentView === 'kavach_report') {
-    return <KavachReportView />;
-  }
-
-  if (currentView === 'investigation_plan') {
-    return <InvestigationPlanView />;
   }
 
   switch (status) {

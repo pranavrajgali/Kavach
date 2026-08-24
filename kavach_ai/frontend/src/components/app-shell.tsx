@@ -1,10 +1,11 @@
 import React from 'react';
 import { useDetonation } from '@/context/DetonationContext';
 import { 
-  LayoutGrid, Settings, RefreshCw, CreditCard, HelpCircle, BookOpen,
-  FileCode, ShieldAlert, Cpu, FileText, Activity, Award, Bot, FlaskConical
+  LayoutGrid, RefreshCw,
+  FileCode, FileText, Award
 } from 'lucide-react';
 import { VajraAssistantDrawer } from '@/components/vajra-assistant-drawer';
+import kavachLogo from '@/assets/kavach.png';
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -26,9 +27,18 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         {/* Top Section */}
         <div>
           {/* Logo Section */}
-          <div className="flex items-center gap-2.5 px-6 py-5 border-b border-border">
-            <LayoutGrid className="w-4 h-4 text-foreground shrink-0" />
-            <h1 className="font-bold text-sm tracking-tight text-foreground">Kavach</h1>
+          <div className="flex items-center gap-3 px-6 py-4 border-b border-border">
+            <img 
+              src={kavachLogo} 
+              alt="Kavach Logo" 
+              className="w-7 h-7 object-contain shrink-0 rounded"
+            />
+            <div>
+              <h1 className="font-extrabold text-[15px] tracking-wide text-foreground font-['Plus_Jakarta_Sans',sans-serif] uppercase">
+                Kavach
+              </h1>
+              <span className="text-[9px] text-muted-foreground block font-mono">SOC Forensic Detonator</span>
+            </div>
           </div>
 
           {/* Navigation Options */}
@@ -39,75 +49,37 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
             <nav className="space-y-0.5">
               <button 
                 onClick={() => setCurrentView('static_scan')}
-                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
                   currentView === 'static_scan'
-                    ? 'bg-primary/10 text-primary'
+                    ? 'bg-primary/10 text-primary border-r-2 border-primary'
                     : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
                 }`}
               >
                 <FileCode className="w-3.5 h-3.5" />
-                Static Analysis
+                Static Analysis & ML
               </button>
               <button 
                 onClick={viewDashboard}
-                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
                   currentView === 'dashboard'
-                    ? 'bg-primary/10 text-primary'
+                    ? 'bg-primary/10 text-primary border-r-2 border-primary'
                     : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
                 }`}
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
                 Dynamic Sandbox
               </button>
-              <button 
-                onClick={() => setCurrentView('bert_classifier')}
-                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
-                  currentView === 'bert_classifier'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
-                }`}
-              >
-                <Cpu className="w-3.5 h-3.5" />
-                BERT ML Classifier
-              </button>
-              <button 
-                onClick={() => setCurrentView('mitre_map')}
-                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
-                  currentView === 'mitre_map'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
-                }`}
-              >
-                <ShieldAlert className="w-3.5 h-3.5" />
-                MITRE ATT&CK Map
-              </button>
-              <button 
-                onClick={() => setCurrentView('rag_agent')}
-                className={`w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
-                  currentView === 'rag_agent'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Bot className="w-3.5 h-3.5 text-primary" />
-                  <span>RAG Agent</span>
-                </div>
-                <span className="text-[8px] font-bold bg-primary/15 text-primary/80 px-1.5 py-px uppercase tracking-wider">
-                  NEW
-                </span>
-              </button>
             </nav>
 
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-3 block mt-5 mb-2">
+            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-3 block mt-6 mb-2">
               Compliance & Auditing
             </span>
             <nav className="space-y-0.5">
               <button 
                 onClick={viewScorecard}
-                className={`w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
                   currentView === 'scorecard'
-                    ? 'bg-primary/10 text-primary'
+                    ? 'bg-primary/10 text-primary border-r-2 border-primary'
                     : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
                 }`}
               >
@@ -116,120 +88,41 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                   Kavach Scorecard
                 </div>
                 <span className="text-[8px] font-bold bg-primary/15 text-primary/80 px-1.5 py-px uppercase tracking-wider">
-                  NEW
+                  LIVE
                 </span>
               </button>
               <button 
                 onClick={() => setCurrentView('cert_in')}
-                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
                   currentView === 'cert_in'
-                    ? 'bg-primary/10 text-primary'
+                    ? 'bg-primary/10 text-primary border-r-2 border-primary'
                     : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
                 }`}
               >
-                <FileText className="w-3.5 h-3.5" />
-                CERT-In Templates
+                <FileText className="w-3.5 h-3.5 text-primary" />
+                CERT-In Annexure A
               </button>
               <button 
                 onClick={() => setCurrentView('kavach_report')}
-                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
+                className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
                   currentView === 'kavach_report'
-                    ? 'bg-primary/10 text-primary'
+                    ? 'bg-primary/10 text-primary border-r-2 border-primary'
                     : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                Kavach AI Report
-              </button>
-              <button 
-                onClick={() => setCurrentView('investigation_plan')}
-                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
-                  currentView === 'investigation_plan'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
-                }`}
-              >
-                <FlaskConical className="w-3.5 h-3.5" />
-                Investigation Plan
-              </button>
-              <button 
-                onClick={() => setCurrentView('sandbox_health')}
-                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
-                  currentView === 'sandbox_health'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
-                }`}
-              >
-                <Activity className="w-3.5 h-3.5" />
-                Sandbox System Health
-              </button>
-            </nav>
-
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-3 block mt-5 mb-2">
-              Administration
-            </span>
-            <nav className="space-y-0.5">
-              <button 
-                onClick={() => setCurrentView('settings')}
-                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
-                  currentView === 'settings'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
-                }`}
-              >
-                <Settings className="w-3.5 h-3.5" />
-                Settings
-              </button>
-              <button 
-                onClick={() => setCurrentView('api_credentials')}
-                className={`w-full flex items-center gap-3 px-3 py-1.5 text-xs font-semibold transition-all text-left rounded-none cursor-pointer ${
-                  currentView === 'api_credentials'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
-                }`}
-              >
-                <CreditCard className="w-3.5 h-3.5" />
-                API Credentials
+                AI Forensic Report
               </button>
             </nav>
           </div>
         </div>
 
-        {/* Bottom Section */}
+        {/* Bottom Section: Sandbox Controller */}
         <div>
-          {/* Changelog & Updates */}
-          <div className="px-6 py-4 border-t border-border">
-            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest block mb-2">
-              CHANGELOG
-            </span>
-            <div className="space-y-1">
-              <div className="text-[11px] font-bold text-foreground">Product update</div>
-              <div className="text-[10px] text-muted-foreground leading-normal">
-                Performance boosts and UI polish.
-              </div>
-              <a href="#" className="text-[10px] text-muted-foreground underline hover:text-foreground block mt-1">
-                Learn more
-              </a>
-            </div>
-            
-            {/* Documentation Links */}
-            <div className="mt-4 space-y-2 pt-3 border-t border-border/40">
-              <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground hover:text-foreground transition-all cursor-pointer">
-                <HelpCircle className="w-3.5 h-3.5" />
-                Help Center
-              </div>
-              <div className="flex items-center gap-2.5 text-[11px] text-muted-foreground hover:text-foreground transition-all cursor-pointer">
-                <BookOpen className="w-3.5 h-3.5" />
-                Documentation
-              </div>
-            </div>
-          </div>
-
-          {/* Sandbox Status Controller */}
           <div className="p-4 border-t border-border bg-card space-y-3">
             <div className="p-3 border border-border bg-card space-y-3 rounded-none">
               <span className="text-[10px] font-semibold text-muted-foreground uppercase block">
-                Sandbox Status
+                Sandbox Environment
               </span>
               
               <div className="flex items-center gap-2">
@@ -262,7 +155,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
                       key={sec}
                       type="button"
                       onClick={() => setDetonationDuration(sec)}
-                      className={`text-[9px] font-medium py-1 px-1.5 transition-all text-center ${
+                      className={`text-[9px] font-medium py-1 px-1.5 transition-all text-center cursor-pointer ${
                         detonationDuration === sec
                           ? 'bg-primary text-primary-foreground font-semibold'
                           : 'text-muted-foreground hover:text-foreground bg-transparent'
@@ -275,8 +168,8 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               </div>
             </div>
 
-            <div className="text-[9px] text-muted-foreground/60 text-center">
-              &copy; 2026 Kavach LLC
+            <div className="text-[9px] text-muted-foreground/60 text-center font-mono">
+              Bank of India Hackathon 2026
             </div>
           </div>
         </div>
